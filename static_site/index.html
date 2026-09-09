@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Retrieval Explorer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-alt: #1d2129;
+    --border: #2a2f3a;
+    --text: #e4e6eb;
+    --text-dim: #9aa1ac;
+    --accent: #5b9dff;
+    --accent-dim: #2c4a75;
+    --code-color: #ff9f5b;
+    --tag-color: #6bcf8f;
+    --easy: #4caf7d;
+    --medium: #e0a83e;
+    --hard: #e05a5a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  header h1:hover { color: var(--accent); }
+  .search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 420px; }
+  #search {
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 20;
+    display: none;
+  }
+  #suggestions div {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #suggestions div:hover { background: var(--accent-dim); }
+
+  .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .control { display: flex; align-items: center; gap: 8px; }
+  .control label { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+  .control input[type=range] { width: 110px; }
+  .control input[type=number] { width: 52px; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 5px; }
+  .control .val { font-size: 12px; color: var(--text); min-width: 32px; }
+
+  /* --- home view --- */
+  #homeView { padding: 18px 20px; }
+  #homeView h2 { margin: 0 0 4px 0; font-size: 18px; }
+  #homeView .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 16px; }
+  #nameFilter {
+    width: 100%;
+    max-width: 420px;
+    padding: 7px 10px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+  #nameFilter:focus { outline: none; border-color: var(--accent); }
+  #tagCloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .tag-toggle {
+    cursor: pointer;
+    background: var(--panel-alt);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    user-select: none;
+  }
+  .tag-toggle:hover { border-color: var(--accent); }
+  .tag-toggle.active {
+    background: rgba(91,157,255,.18);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  #resultMeta { color: var(--text-dim); font-size: 12.5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  #clearFilters { color: var(--accent); cursor: pointer; font-size: 12.5px; }
+  #problemList { display: flex; flex-direction: column; gap: 6px; }
+  .prow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .prow:hover { border-color: var(--accent); }
+  .prow-name { font-weight: 600; font-size: 13.5px; flex-shrink: 0; }
+  .prow-tags { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
+  .lc-link {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+  }
+  .lc-link:hover { color: var(--accent); border-color: var(--accent); }
+  .title-row { display: flex; align-items: center; gap: 8px; }
+
+  /* --- problem view --- */
+  #problemView { display: none; }
+  #problemControls {
+    padding: 8px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  main {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 0;
+    height: calc(100vh - 96px);
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+  }
+
+  #detail {
+    border-right: 1px solid var(--border);
+    padding: 18px 20px;
+    overflow-y: auto;
+  }
+  #neighbors {
+    padding: 18px 20px;
+    overflow-y: auto;
+  }
+  h2.pname {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    word-break: break-word;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .badge.Easy { background: rgba(76,175,125,.18); color: var(--easy); }
+  .badge.Medium { background: rgba(224,168,62,.18); color: var(--medium); }
+  .badge.Hard { background: rgba(224,90,90,.18); color: var(--hard); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+  .chip {
+    background: rgba(107,207,143,.13);
+    color: var(--tag-color);
+    padding: 2px 8px;
+    border-radius: 9px;
+    font-size: 11px;
+  }
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-dim);
+    margin: 16px 0 6px 0;
+    font-weight: 600;
+  }
+  .mechanism-text { line-height: 1.55; color: var(--text); font-size: 13.5px; }
+  .techniques { list-style: none; padding: 0; margin: 0; }
+  .techniques li { margin-bottom: 8px; font-size: 13px; }
+  .techniques .tname { color: var(--code-color); font-weight: 600; }
+  .techniques .trole { color: var(--text-dim); }
+  pre.code {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 12.5px;
+    margin: 4px 0;
+  }
+
+  .nb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .nb-header h3 { margin: 0; font-size: 13px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .nb-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .12s;
+  }
+  .nb-card:hover { border-color: var(--accent); }
+  .nb-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .nb-name { font-weight: 600; font-size: 14px; }
+  .nb-rank { color: var(--text-dim); font-size: 12px; margin-right: 8px; }
+  .score-bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .score-bar {
+    width: 70px;
+    height: 6px;
+    background: var(--panel-alt);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .score-bar .fill { height: 100%; background: var(--accent); }
+  .score-num { font-size: 11px; color: var(--text-dim); min-width: 34px; }
+  .nb-meta { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .nb-mechanism {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .sub-scores { display:flex; gap:14px; margin-top:6px; font-size:11px; color:var(--text-dim); }
+  .empty-state { color: var(--text-dim); padding: 40px 0; text-align: center; }
+
+  #promptPanel {
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  #promptBar { display: flex; gap: 10px; align-items: flex-start; }
+  #promptInput {
+    flex: 1;
+    resize: vertical;
+    min-height: 38px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  #promptInput:disabled { opacity: .5; }
+  #promptBtn {
+    background: var(--accent);
+    color: #0f1117;
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    height: 38px;
+    white-space: nowrap;
+  }
+  #promptBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+  #loadingOverlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay">Loading problem dataset…</div>
+
+<header>
+  <h1 id="homeLink">🔎 Retrieval Explorer</h1>
+  <div class="search-wrap">
+    <input id="search" placeholder="Jump to a problem (type to search)…" autocomplete="off">
+    <div id="suggestions"></div>
+  </div>
+</header>
+
+<div id="homeView">
+  <h2>Browse problems</h2>
+  <div class="sub">Filter by tag and/or name, then pick a problem to explore its matches.</div>
+  <input id="nameFilter" placeholder="Filter by name…">
+  <div id="tagCloud"></div>
+  <div id="resultMeta">
+    <span id="resultCount"></span>
+    <span id="clearFilters">Clear filters</span>
+  </div>
+  <div id="problemList"></div>
+</div>
+
+<div id="problemView">
+  <div id="promptPanel">
+    <div id="promptBar">
+      <textarea id="promptInput" rows="2" disabled placeholder="Search by description is coming soon (needs a small serverless backend for the LLM rewrite step)…"></textarea>
+      <button id="promptBtn" disabled>Search by description</button>
+    </div>
+  </div>
+
+  <div id="problemControls">
+    <div class="controls">
+      <div class="control">
+        <label>Weight (tag ← → code-only)</label>
+        <input type="range" id="alpha" min="0" max="1" step="0.05" value="0.7">
+        <span class="val" id="alphaVal">0.70</span>
+      </div>
+      <div class="control">
+        <label>K</label>
+        <input type="number" id="k" min="1" max="60" value="12">
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div id="detail"></div>
+    <div id="neighbors"></div>
+  </main>
+</div>
+
+<script>
+const state = {
+  current: null,
+  k: 12,
+  alpha: 0.7,
+  activeTags: new Set(),
+  nameFilterQuery: '',
+};
+
+let DATA = null;        // { tag_idf, problems }
+let NAMES = [];         // problem names, index-aligned with DATA.problems
+let NAME_TO_IDX = null; // Map name -> index into DATA.problems
+let TAG_COUNTS = null;  // Map tag -> count of problems carrying it
+
+const $ = (sel) => document.querySelector(sel);
+const searchInput = $('#search');
+const suggestionsBox = $('#suggestions');
+const alphaSlider = $('#alpha');
+const alphaVal = $('#alphaVal');
+const kInput = $('#k');
+const detailEl = $('#detail');
+const neighborsEl = $('#neighbors');
+const homeViewEl = $('#homeView');
+const problemViewEl = $('#problemView');
+const tagCloudEl = $('#tagCloud');
+const nameFilterEl = $('#nameFilter');
+const problemListEl = $('#problemList');
+const resultCountEl = $('#resultCount');
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function difficultyBadge(d) {
+  return `<span class="badge ${escapeHtml(d)}">${escapeHtml(d)}</span>`;
+}
+
+function leetcodeUrl(name) {
+  return `https://leetcode.com/problems/${encodeURIComponent(name)}/`;
+}
+
+function leetcodeLink(name) {
+  return `<a class="lc-link" href="${leetcodeUrl(name)}" target="_blank" rel="noopener noreferrer" title="Open on LeetCode">↗ LeetCode</a>`;
+}
+
+// --- client-side similarity math, mirroring categorical_similarity.py's
+// IDF-weighted Dice (tags) and the plain dot product over pre-normalized
+// embeddings (code-only) that retrieval_explorer_app.py computed server-side ---
+
+function codeSim(embA, embB) {
+  let dot = 0;
+  for (let i = 0; i < embA.length; i++) dot += embA[i] * embB[i];
+  return dot;
+}
+
+function tagSim(tagsA, tagsB) {
+  const idf = DATA.tag_idf;
+  const setA = new Set(tagsA);
+  const setB = new Set(tagsB);
+  let sumA = 0, sumB = 0, sumShared = 0;
+  for (const t of setA) sumA += idf[t] || 0;
+  for (const t of setB) sumB += idf[t] || 0;
+  for (const t of setA) if (setB.has(t)) sumShared += idf[t] || 0;
+  const denom = sumA + sumB;
+  return denom ? (2 * sumShared) / denom : 0;
+}
+
+function computeNeighbors(idx, k, alpha) {
+  const query = DATA.problems[idx];
+  const scored = [];
+  for (let i = 0; i < DATA.problems.length; i++) {
+    if (i === idx) continue;
+    const other = DATA.problems[i];
+    const cs = codeSim(query.embedding, other.embedding);
+    const ts = tagSim(query.tags, other.tags);
+    scored.push({ idx: i, combined: alpha * cs + (1 - alpha) * ts, code: cs, tag: ts });
+  }
+  scored.sort((a, b) => b.combined - a.combined);
+  return scored.slice(0, k);
+}
+
+// For a freshly-embedded free-text query vector, not an existing problem --
+// pure code-only cosine similarity, no tag blend (a query has no tags of its
+// own to compare), matching retrieval_explorer_app.py's /api/query design.
+// queryVec must already be L2-normalized, same invariant as every embedding
+// in DATA.problems.
+function computeNeighborsForVector(queryVec, k) {
+  const scored = [];
+  for (let i = 0; i < DATA.problems.length; i++) {
+    const other = DATA.problems[i];
+    scored.push({ idx: i, score: codeSim(queryVec, other.embedding) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, k);
+}
+
+function searchNames(q) {
+  const lower = q.toLowerCase();
+  const out = [];
+  for (const n of NAMES) {
+    if (n.toLowerCase().includes(lower)) {
+      out.push(n);
+      if (out.length >= 50) break;
+    }
+  }
+  return out;
+}
+
+// --- routing: hash-based, so browser back/forward work natively instead
+// of a custom breadcrumb trail. '#/problem/<name>' -> graph-walk view,
+// anything else (including empty) -> home/browse view. ---
+
+function navigate(hash) {
+  if (location.hash === hash) { render(); return; }
+  location.hash = hash;
+}
+
+function goToProblem(name) {
+  if (!NAME_TO_IDX.has(name)) return;
+  navigate('#/problem/' + encodeURIComponent(name));
+}
+
+function goHome() {
+  navigate('');
+}
+
+function currentRoute() {
+  const hash = location.hash;
+  if (hash.startsWith('#/problem/')) {
+    return { view: 'problem', name: decodeURIComponent(hash.slice('#/problem/'.length)) };
+  }
+  return { view: 'home' };
+}
+
+function render() {
+  const route = currentRoute();
+  if (route.view === 'problem' && NAME_TO_IDX.has(route.name)) {
+    homeViewEl.style.display = 'none';
+    problemViewEl.style.display = 'block';
+    renderProblem(route.name);
+  } else {
+    problemViewEl.style.display = 'none';
+    homeViewEl.style.display = 'block';
+    renderHome();
+  }
+}
+
+window.addEventListener('hashchange', render);
+$('#homeLink').addEventListener('click', goHome);
+
+// --- home view: tag cloud + name filter + problem list ---
+
+function renderTagCloud() {
+  const tags = Object.keys(TAG_COUNTS).sort();
+  tagCloudEl.innerHTML = tags.map(t =>
+    `<span class="tag-toggle${state.activeTags.has(t) ? ' active' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} (${TAG_COUNTS[t]})</span>`
+  ).join('');
+  tagCloudEl.querySelectorAll('.tag-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const tag = el.dataset.tag;
+      if (state.activeTags.has(tag)) state.activeTags.delete(tag);
+      else state.activeTags.add(tag);
+      renderHome();
+    });
+  });
+}
+
+function filteredProblems() {
+  const q = state.nameFilterQuery.toLowerCase();
+  return DATA.problems.filter(p => {
+    if (q && !p.name.toLowerCase().includes(q)) return false;
+    for (const t of state.activeTags) {
+      if (!p.tags.includes(t)) return false;
+    }
+    return true;
+  });
+}
+
+function renderHome() {
+  renderTagCloud();
+  const results = filteredProblems();
+  resultCountEl.textContent = `${results.length} of ${DATA.problems.length} problems`;
+  problemListEl.innerHTML = results.map(p => `
+    <div class="prow" data-name="${escapeHtml(p.name)}">
+      <span class="prow-name">${escapeHtml(p.name)}</span>
+      ${leetcodeLink(p.name)}
+      ${difficultyBadge(p.difficulty)}
+      <div class="prow-tags">${p.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
+    </div>
+  `).join('');
+  problemListEl.querySelectorAll('.prow').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.lc-link')) return;
+      goToProblem(el.dataset.name);
+    });
+  });
+}
+
+nameFilterEl.addEventListener('input', () => {
+  state.nameFilterQuery = nameFilterEl.value.trim();
+  renderHome();
+});
+$('#clearFilters').addEventListener('click', () => {
+  state.activeTags.clear();
+  state.nameFilterQuery = '';
+  nameFilterEl.value = '';
+  renderHome();
+});
+
+// --- problem view: detail + ranked neighbors ---
+
+function renderProblem(name) {
+  state.current = name;
+  renderDetail(name);
+  renderNeighbors(name);
+}
+
+function renderDetail(name) {
+  const data = DATA.problems[NAME_TO_IDX.get(name)];
+  const techniques = (data.techniques || []).map(t =>
+    `<li><span class="tname">${escapeHtml(t.name)}</span> — <span class="trole">${escapeHtml(t.role)}</span></li>`
+  ).join('');
+  detailEl.innerHTML = `
+    <div class="title-row">
+      <h2 class="pname">${escapeHtml(data.name)}</h2>
+      ${leetcodeLink(data.name)}
+    </div>
+    <div class="chips" style="margin-top:10px;">${difficultyBadge(data.difficulty)}${(data.tags || []).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
+    ${techniques ? `<div class="section-label">Techniques</div><ul class="techniques">${techniques}</ul>` : ''}
+    <details>
+      <summary>Show code</summary>
+      <pre class="code">${escapeHtml(data.code || '')}</pre>
+    </details>
+    <details>
+      <summary>Show problem description</summary>
+      <div class="mechanism-text" style="margin-top:8px;">${escapeHtml(data.description || '')}</div>
+    </details>
+  `;
+}
+
+function scoreBar(label, value) {
+  const pct = Math.max(0, Math.min(100, value * 100));
+  return `<div class="score-bar-wrap" title="${label}: ${value.toFixed(3)}">
+    <div class="score-bar"><div class="fill" style="width:${pct}%"></div></div>
+    <span class="score-num">${value.toFixed(2)}</span>
+  </div>`;
+}
+
+function renderNeighbors(name) {
+  const idx = NAME_TO_IDX.get(name);
+  const list = computeNeighbors(idx, state.k, state.alpha);
+  if (!list.length) {
+    neighborsEl.innerHTML = '<div class="empty-state">No neighbors found.</div>';
+    return;
+  }
+  const cards = list.map((n, i) => {
+    const p = DATA.problems[n.idx];
+    return `
+    <div class="nb-card" data-name="${escapeHtml(p.name)}">
+      <div class="nb-top">
+        <div><span class="nb-rank">#${i + 1}</span><span class="nb-name">${escapeHtml(p.name)}</span></div>
+        ${scoreBar('combined', n.combined)}
+      </div>
+      <div class="sub-scores">
+        <span>code-only: ${n.code.toFixed(3)}</span>
+        <span>tag: ${n.tag.toFixed(3)}</span>
+        <span>${difficultyBadge(p.difficulty)}</span>
+      </div>
+      <div class="nb-meta">${(p.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
+      <div class="nb-mechanism">${escapeHtml(p.mechanism || '')}</div>
+    </div>
+  `;
+  }).join('');
+  neighborsEl.innerHTML = `
+    <div class="nb-header"><h3>Top ${list.length} matches</h3></div>
+    ${cards}
+  `;
+  neighborsEl.querySelectorAll('.nb-card').forEach(el => {
+    el.addEventListener('click', () => goToProblem(el.dataset.name));
+  });
+}
+
+// --- global search / autocomplete (works from either view) ---
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim();
+  if (!q) { suggestionsBox.style.display = 'none'; return; }
+  const names = searchNames(q);
+  if (!names.length) { suggestionsBox.style.display = 'none'; return; }
+  suggestionsBox.innerHTML = names.map(n => `<div data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('');
+  suggestionsBox.style.display = 'block';
+  suggestionsBox.querySelectorAll('div').forEach(el => {
+    el.addEventListener('click', () => {
+      searchInput.value = '';
+      suggestionsBox.style.display = 'none';
+      goToProblem(el.dataset.name);
+    });
+  });
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap')) suggestionsBox.style.display = 'none';
+});
+
+// --- problem-view controls ---
+alphaSlider.addEventListener('input', () => {
+  state.alpha = parseFloat(alphaSlider.value);
+  alphaVal.textContent = state.alpha.toFixed(2);
+  if (state.current) renderNeighbors(state.current);
+});
+kInput.addEventListener('change', () => {
+  let k = parseInt(kInput.value, 10);
+  if (isNaN(k) || k < 1) k = 1;
+  if (k > 60) k = 60;
+  kInput.value = k;
+  state.k = k;
+  if (state.current) renderNeighbors(state.current);
+});
+
+// --- initial load: fetch the static dataset, compute tag counts, render ---
+(async () => {
+  const res = await fetch('data.json');
+  DATA = await res.json();
+  NAMES = DATA.problems.map(p => p.name);
+  NAME_TO_IDX = new Map(NAMES.map((n, i) => [n, i]));
+
+  TAG_COUNTS = {};
+  for (const p of DATA.problems) {
+    for (const t of p.tags) {
+      TAG_COUNTS[t] = (TAG_COUNTS[t] || 0) + 1;
+    }
+  }
+
+  document.getElementById('loadingOverlay').remove();
+  render();
+})();
+</script>
+</body>
+</html>
