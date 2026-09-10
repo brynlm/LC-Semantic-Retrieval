@@ -318,6 +318,23 @@
     white-space: nowrap;
   }
   #promptBtn:disabled { opacity: .4; cursor: not-allowed; }
+  #promptResults { margin-top: 12px; }
+  .rewritten-box {
+    background: var(--panel-alt);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .rewritten-box .label { color: var(--accent); font-weight: 600; margin-right: 4px; }
+  .prompt-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+  }
 
   #loadingOverlay {
     position: fixed;
@@ -359,9 +376,10 @@
 <div id="problemView">
   <div id="promptPanel">
     <div id="promptBar">
-      <textarea id="promptInput" rows="2" disabled placeholder="Search by description is coming soon (needs a small serverless backend for the LLM rewrite step)…"></textarea>
-      <button id="promptBtn" disabled>Search by description</button>
+      <textarea id="promptInput" rows="2" placeholder="Describe the kind of problem or mechanism you're looking for… (e.g. &quot;two pointers closing in from both ends of a sorted array&quot;)"></textarea>
+      <button id="promptBtn">Search by description</button>
     </div>
+    <div id="promptResults"></div>
   </div>
 
   <div id="problemControls">
@@ -412,6 +430,9 @@ const tagCloudEl = $('#tagCloud');
 const nameFilterEl = $('#nameFilter');
 const problemListEl = $('#problemList');
 const resultCountEl = $('#resultCount');
+const promptInput = $('#promptInput');
+const promptBtn = $('#promptBtn');
+const promptResultsEl = $('#promptResults');
 
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -479,6 +500,147 @@ function computeNeighborsForVector(queryVec, k) {
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, k);
 }
+
+// --- prompt-based retrieval: LLM query rewrite (serverless function) ->
+// client-side embedding (transformers.js) -> computeNeighborsForVector ---
+
+const TRANSFORMERS_JS_VERSION = '2.17.2'; // pinned to match the parity check
+// against the Python sentence-transformers embeddings (cosine sim ~0.99)
+
+let embedPipelinePromise = null;
+function getEmbedPipeline() {
+  // load the library and the model lazily, only on first actual use, and
+  // only once -- transformers.js caches the downloaded model weights in the
+  // browser itself, so this only pays the ~25-30MB download cost the very
+  // first time a visitor uses this feature.
+  if (!embedPipelinePromise) {
+    // the bare package specifier resolves to Node's CJS main entry, not a
+    // browser-usable ES module -- dist/transformers.min.js is the actual
+    // bundled ESM build (verified: ends in a webpack `export {...}` and
+    // jsDelivr serves it as application/javascript).
+    const libUrl = `https://cdn.jsdelivr.net/npm/@xenova/transformers@${TRANSFORMERS_JS_VERSION}/dist/transformers.min.js`;
+    embedPipelinePromise = (async () => {
+      let pipelineFn;
+      try {
+        const { pipeline, env } = await import(libUrl);
+        // transformers.js defaults to checking a SAME-ORIGIN path
+        // (env.localModelPath, "/models/" by default) for the model files
+        // before ever trying Hugging Face's hub. Cloudflare Pages (and this
+        // wrangler dev server) serve index.html with a 200 status for any
+        // unmatched path (SPA-style fallback), so that same-origin probe
+        // "succeeds" with our own HTML page instead of 404ing -- the library
+        // never reaches its "not found locally, try remote" branch, and
+        // tries to JSON.parse our index.html instead of the real tokenizer
+        // file. Disabling local models entirely skips that same-origin
+        // check and goes straight to the real Hugging Face URL.
+        env.allowLocalModels = false;
+        pipelineFn = pipeline;
+        console.log('transformers.js loaded OK from', libUrl);
+      } catch (e) {
+        console.error('Failed to load transformers.js from', libUrl, e);
+        throw e;
+      }
+      try {
+        console.log('Loading Xenova/all-MiniLM-L6-v2 model (first use only, cached after)…');
+        return await pipelineFn('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+      } catch (e) {
+        console.error('Failed to load the embedding model:', e);
+        throw e;
+      }
+    })();
+  }
+  return embedPipelinePromise;
+}
+
+async function embedText(text) {
+  const extractor = await getEmbedPipeline();
+  const output = await extractor(text, { pooling: 'mean', normalize: true });
+  return Array.from(output.data);
+}
+
+// Calls the serverless function that turns a free-text prompt into a
+// paragraph written in the corpus's own mechanism-abstract register (see
+// static_site/functions/api/rewrite.js). Returns null on ANY failure
+// (network error, non-200, or the function's own "all models exhausted"
+// signal) -- the caller treats null as the cue to fall back to embedding
+// the user's raw prompt directly rather than surfacing an error.
+async function rewriteQuery(prompt) {
+  try {
+    const res = await fetch('/api/rewrite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.rewritten || null;
+  } catch {
+    return null;
+  }
+}
+
+function renderPromptResults(text, degraded, results) {
+  const cards = results.map(r => {
+    const p = DATA.problems[r.idx];
+    return `
+    <div class="nb-card" data-name="${escapeHtml(p.name)}">
+      <div class="nb-top">
+        <span class="nb-name">${escapeHtml(p.name)}</span>
+        ${scoreBar('similarity', r.score)}
+      </div>
+      <div class="nb-meta">
+        ${difficultyBadge(p.difficulty)}
+        ${(p.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}
+      </div>
+      <div class="nb-mechanism">${escapeHtml(p.mechanism || '')}</div>
+    </div>`;
+  }).join('');
+
+  const note = degraded
+    ? `<span class="label">Using your exact wording</span> — the rewrite step is temporarily unavailable, so this searched your prompt as-is.`
+    : `<span class="label">Interpreted as:</span>${escapeHtml(text)}`;
+
+  promptResultsEl.innerHTML = `
+    <div class="rewritten-box">${note}</div>
+    <div class="prompt-cards">${cards}</div>
+  `;
+  promptResultsEl.querySelectorAll('.nb-card').forEach(el => {
+    el.addEventListener('click', () => goToProblem(el.dataset.name));
+  });
+}
+
+async function runPromptSearch() {
+  const prompt = promptInput.value.trim();
+  if (!prompt) return;
+
+  promptBtn.disabled = true;
+  promptBtn.textContent = 'Rewriting…';
+  promptResultsEl.innerHTML = '<div class="empty-state">Rewriting query…</div>';
+
+  try {
+    const rewritten = await rewriteQuery(prompt);
+    const degraded = rewritten === null;
+    const textToEmbed = degraded ? prompt : rewritten;
+
+    promptBtn.textContent = 'Loading embedding model…';
+    promptResultsEl.innerHTML = '<div class="empty-state">Loading local embedding model (first use only)…</div>';
+
+    const queryVec = await embedText(textToEmbed);
+    const results = computeNeighborsForVector(queryVec, state.k);
+    renderPromptResults(textToEmbed, degraded, results);
+  } catch (e) {
+    console.error('Prompt search failed:', e);
+    promptResultsEl.innerHTML = `<div class="empty-state">Search failed: ${escapeHtml(e.message)}</div>`;
+  } finally {
+    promptBtn.disabled = false;
+    promptBtn.textContent = 'Search by description';
+  }
+}
+
+promptBtn.addEventListener('click', runPromptSearch);
+promptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runPromptSearch();
+});
 
 function searchNames(q) {
   const lower = q.toLowerCase();
@@ -703,8 +865,16 @@ kInput.addEventListener('change', () => {
 
 // --- initial load: fetch the static dataset, compute tag counts, render ---
 (async () => {
-  const res = await fetch('data.json');
-  DATA = await res.json();
+  let res;
+  try {
+    res = await fetch('data.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    DATA = await res.json();
+  } catch (e) {
+    document.getElementById('loadingOverlay').textContent =
+      `Failed to load problem dataset (${e.message}). Try refreshing the page.`;
+    return;
+  }
   NAMES = DATA.problems.map(p => p.name);
   NAME_TO_IDX = new Map(NAMES.map((n, i) => [n, i]));
 
