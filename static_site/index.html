@@ -25,7 +25,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 14px;
+    font-size: 16px;
   }
   header {
     display: flex;
@@ -37,7 +37,7 @@
     flex-wrap: wrap;
   }
   header h1 {
-    font-size: 16px;
+    font-size: 18px;
     margin: 0;
     font-weight: 600;
     white-space: nowrap;
@@ -52,7 +52,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 15px;
   }
   #search:focus { outline: none; border-color: var(--accent); }
   #suggestions {
@@ -72,23 +72,23 @@
   #suggestions div {
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 15px;
   }
   #suggestions div:hover { background: var(--accent-dim); }
 
   .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .control { display: flex; align-items: center; gap: 8px; }
-  .control label { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+  .control label { color: var(--text-dim); font-size: 14px; white-space: nowrap; }
   .control input[type=range] { width: 110px; }
   .control input[type=number] { width: 52px; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 5px; }
-  .control .val { font-size: 12px; color: var(--text); min-width: 32px; }
+  .control .val { font-size: 14px; color: var(--text); min-width: 32px; }
 
   /* --- home view --- */
   #homeView { padding: 18px 20px; }
   #searchView { display: none; padding: 18px 20px; }
-  #searchView h2 { margin: 0 0 14px 0; font-size: 18px; }
-  #homeView h2 { margin: 0 0 4px 0; font-size: 18px; }
-  #homeView .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 16px; }
+  #searchView h2 { margin: 0 0 14px 0; font-size: 20px; }
+  #homeView h2 { margin: 0 0 4px 0; font-size: 20px; }
+  #homeView .sub { color: var(--text-dim); font-size: 15px; margin-bottom: 16px; }
   #nameFilter {
     width: 100%;
     max-width: 420px;
@@ -97,7 +97,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 15px;
     margin-bottom: 14px;
   }
   #nameFilter:focus { outline: none; border-color: var(--accent); }
@@ -120,7 +120,7 @@
     border: 1px solid var(--border);
     padding: 3px 10px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 14px;
     user-select: none;
   }
   .tag-toggle:hover { border-color: var(--accent); }
@@ -129,8 +129,8 @@
     color: var(--accent);
     border-color: var(--accent);
   }
-  #resultMeta { color: var(--text-dim); font-size: 12.5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-  #clearFilters { color: var(--accent); cursor: pointer; font-size: 12.5px; }
+  #resultMeta { color: var(--text-dim); font-size: 14.5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  #clearFilters { color: var(--accent); cursor: pointer; font-size: 14.5px; }
   #problemList { display: flex; flex-direction: column; gap: 6px; }
   .prow {
     display: flex;
@@ -143,12 +143,12 @@
     cursor: pointer;
   }
   .prow:hover { border-color: var(--accent); }
-  .prow-name { font-weight: 600; font-size: 13.5px; flex-shrink: 0; }
+  .prow-name { font-weight: 600; font-size: 15.5px; flex-shrink: 0; }
   .prow-tags { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
   .lc-link {
     color: var(--text-dim);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 15px;
     border: 1px solid var(--border);
     border-radius: 5px;
     padding: 1px 6px;
@@ -190,7 +190,7 @@
   }
   h2.pname {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
     word-break: break-word;
   }
@@ -198,7 +198,7 @@
     display: inline-block;
     padding: 2px 8px;
     border-radius: 10px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     margin-right: 6px;
   }
@@ -211,19 +211,19 @@
     color: var(--tag-color);
     padding: 2px 8px;
     border-radius: 9px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .section-label {
-    font-size: 11px;
+    font-size: 13px;
     text-transform: uppercase;
     letter-spacing: .04em;
     color: var(--text-dim);
     margin: 16px 0 6px 0;
     font-weight: 600;
   }
-  .mechanism-text { line-height: 1.55; color: var(--text); font-size: 13.5px; }
+  .mechanism-text { line-height: 1.55; color: var(--text); font-size: 15.5px; }
   .techniques { list-style: none; padding: 0; margin: 0; }
-  .techniques li { margin-bottom: 8px; font-size: 13px; }
+  .techniques li { margin-bottom: 8px; font-size: 15px; }
   .techniques .tname { color: var(--code-color); font-weight: 600; }
   .techniques .trole { color: var(--text-dim); }
   pre.code {
@@ -231,7 +231,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px 12px;
-    font-size: 12px;
+    font-size: 14px;
     overflow-x: auto;
     white-space: pre;
     max-height: 320px;
@@ -240,7 +240,7 @@
   details summary {
     cursor: pointer;
     color: var(--accent);
-    font-size: 12.5px;
+    font-size: 14.5px;
     margin: 4px 0;
   }
 
@@ -250,7 +250,7 @@
     align-items: baseline;
     margin-bottom: 12px;
   }
-  .nb-header h3 { margin: 0; font-size: 13px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .nb-header h3 { margin: 0; font-size: 15px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
   .nb-card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -262,8 +262,8 @@
   }
   .nb-card:hover { border-color: var(--accent); }
   .nb-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .nb-name { font-weight: 600; font-size: 14px; }
-  .nb-rank { color: var(--text-dim); font-size: 12px; margin-right: 8px; }
+  .nb-name { font-weight: 600; font-size: 16px; }
+  .nb-rank { color: var(--text-dim); font-size: 14px; margin-right: 8px; }
   .score-bar-wrap { display: flex; align-items: center; gap: 6px; }
   .score-bar {
     width: 70px;
@@ -273,19 +273,9 @@
     overflow: hidden;
   }
   .score-bar .fill { height: 100%; background: var(--accent); }
-  .score-num { font-size: 11px; color: var(--text-dim); min-width: 34px; }
+  .score-num { font-size: 13px; color: var(--text-dim); min-width: 34px; }
   .nb-meta { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .nb-mechanism {
-    margin-top: 8px;
-    font-size: 12.5px;
-    color: var(--text-dim);
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .sub-scores { display:flex; gap:14px; margin-top:6px; font-size:11px; color:var(--text-dim); }
+  .sub-scores { display:flex; gap:14px; margin-top:6px; font-size:13px; color:var(--text-dim); }
   .empty-state { color: var(--text-dim); padding: 40px 0; text-align: center; }
 
   #promptPanel {
@@ -303,7 +293,7 @@
     border-radius: 6px;
     color: var(--text);
     font-family: inherit;
-    font-size: 13px;
+    font-size: 15px;
     padding: 8px 10px;
   }
   #promptInput:disabled { opacity: .5; }
@@ -313,21 +303,21 @@
     border: none;
     border-radius: 6px;
     padding: 0 16px;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     height: 38px;
     white-space: nowrap;
   }
   #promptBtn:disabled { opacity: .4; cursor: not-allowed; }
-  #searchStatus { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); }
+  #searchStatus { margin-top: 8px; font-size: 14.5px; color: var(--text-dim); }
   #promptResults { margin-top: 0; }
   .rewritten-box {
     background: var(--panel-alt);
     border: 1px dashed var(--border);
     border-radius: 6px;
     padding: 10px 12px;
-    font-size: 12.5px;
+    font-size: 14.5px;
     color: var(--text-dim);
     margin-bottom: 12px;
     line-height: 1.5;
@@ -348,7 +338,7 @@
     justify-content: center;
     z-index: 100;
     color: var(--text-dim);
-    font-size: 14px;
+    font-size: 16px;
   }
 </style>
 </head>
@@ -451,6 +441,36 @@ function escapeHtml(s) {
 
 function difficultyBadge(d) {
   return `<span class="badge ${escapeHtml(d)}">${escapeHtml(d)}</span>`;
+}
+
+// Display-only title-casing of a problem's URL slug -- e.g. "course-schedule-ii"
+// -> "Course Schedule II". The raw slug (data.name / data-name attributes)
+// is never touched by this; it's still what routing, lookups, and the
+// LeetCode URL all use. This is a heuristic, not a perfect reconstruction of
+// LeetCode's real title: a slug collapses both "this dash was a space" and
+// "this dash was a real hyphen in the title" into the same character (e.g.
+// "n-th-tribonacci-number" -> "N Th Tribonacci Number", not the real
+// "N-th Tribonacci Number"), and acronyms LeetCode capitalizes fully (LRU,
+// LFU, BST) aren't distinguishable from ordinary words in a lowercase slug.
+// Roman-numeral sequel suffixes (very common in this corpus: II, III, IV...)
+// are the one case worth handling explicitly, so "-ii" doesn't render as the
+// word "Ii".
+const TITLE_CASE_MINOR_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
+  'to', 'in', 'on', 'at', 'by', 'of', 'up', 'off', 'out', 'as', 'if', 'vs',
+]);
+const ROMAN_NUMERAL_RE = /^(i|ii|iii|iv|v|vi|vii|viii|ix|x)$/i;
+
+function displayName(slug) {
+  const words = slug.split('-');
+  return words.map((w, i) => {
+    if (ROMAN_NUMERAL_RE.test(w)) return w.toUpperCase();
+    const lower = w.toLowerCase();
+    if (i !== 0 && i !== words.length - 1 && TITLE_CASE_MINOR_WORDS.has(lower)) {
+      return lower;
+    }
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }).join(' ');
 }
 
 function leetcodeUrl(name) {
@@ -599,30 +619,33 @@ function renderSearchView() {
     promptResultsEl.innerHTML = '<div class="empty-state">No search yet — type a description above and hit search.</div>';
     return;
   }
-  const { rewritten, degraded, results } = state.lastSearch;
+  const { degraded, results } = state.lastSearch;
 
   const cards = results.map(r => {
     const p = DATA.problems[r.idx];
     return `
     <div class="nb-card" data-name="${escapeHtml(p.name)}">
       <div class="nb-top">
-        <span class="nb-name">${escapeHtml(p.name)}</span>
+        <span class="nb-name">${escapeHtml(displayName(p.name))}</span>
         ${scoreBar('similarity', r.score)}
       </div>
       <div class="nb-meta">
         ${difficultyBadge(p.difficulty)}
         ${(p.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}
       </div>
-      <div class="nb-mechanism">${escapeHtml(p.mechanism || '')}</div>
     </div>`;
   }).join('');
 
-  const note = degraded
-    ? `<span class="label">Using your exact wording</span> — the rewrite step is temporarily unavailable, so this searched your prompt as-is.`
-    : `<span class="label">Interpreted as:</span>${escapeHtml(rewritten)}`;
+  // Only shown in degraded mode (rewrite step unavailable) -- that's a
+  // user-facing status worth knowing about. The rewritten text itself isn't
+  // shown, same reasoning as dropping the mechanism abstracts: an internal
+  // implementation detail, not something the user needs to see.
+  const degradedNote = degraded
+    ? `<div class="rewritten-box"><span class="label">Using your exact wording</span> — the rewrite step is temporarily unavailable, so this searched your prompt as-is.</div>`
+    : '';
 
   promptResultsEl.innerHTML = `
-    <div class="rewritten-box">${note}</div>
+    ${degradedNote}
     <div class="prompt-cards">${cards}</div>
   `;
   promptResultsEl.querySelectorAll('.nb-card').forEach(el => {
@@ -665,11 +688,18 @@ promptInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runPromptSearch();
 });
 
+// dashes vs spaces shouldn't matter for matching -- titles now display with
+// spaces (displayName), so typing "two sum" should find "two-sum" same as
+// typing "two-sum" would.
+function normalizeForSearch(s) {
+  return s.toLowerCase().replace(/-/g, ' ');
+}
+
 function searchNames(q) {
-  const lower = q.toLowerCase();
+  const lower = normalizeForSearch(q);
   const out = [];
   for (const n of NAMES) {
-    if (n.toLowerCase().includes(lower)) {
+    if (normalizeForSearch(n).includes(lower)) {
       out.push(n);
       if (out.length >= 50) break;
     }
@@ -749,9 +779,9 @@ function renderTagCloud() {
 }
 
 function filteredProblems() {
-  const q = state.nameFilterQuery.toLowerCase();
+  const q = normalizeForSearch(state.nameFilterQuery);
   return DATA.problems.filter(p => {
-    if (q && !p.name.toLowerCase().includes(q)) return false;
+    if (q && !normalizeForSearch(p.name).includes(q)) return false;
     for (const t of state.activeTags) {
       if (!p.tags.includes(t)) return false;
     }
@@ -765,7 +795,7 @@ function renderHome() {
   resultCountEl.textContent = `${results.length} of ${DATA.problems.length} problems`;
   problemListEl.innerHTML = results.map(p => `
     <div class="prow" data-name="${escapeHtml(p.name)}">
-      <span class="prow-name">${escapeHtml(p.name)}</span>
+      <span class="prow-name">${escapeHtml(displayName(p.name))}</span>
       ${leetcodeLink(p.name)}
       ${difficultyBadge(p.difficulty)}
       <div class="prow-tags">${p.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
@@ -805,7 +835,7 @@ function renderDetail(name) {
   ).join('');
   detailEl.innerHTML = `
     <div class="title-row">
-      <h2 class="pname">${escapeHtml(data.name)}</h2>
+      <h2 class="pname">${escapeHtml(displayName(data.name))}</h2>
       ${leetcodeLink(data.name)}
     </div>
     <div class="chips" style="margin-top:10px;">${difficultyBadge(data.difficulty)}${(data.tags || []).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
@@ -841,7 +871,7 @@ function renderNeighbors(name) {
     return `
     <div class="nb-card" data-name="${escapeHtml(p.name)}">
       <div class="nb-top">
-        <div><span class="nb-rank">#${i + 1}</span><span class="nb-name">${escapeHtml(p.name)}</span></div>
+        <div><span class="nb-rank">#${i + 1}</span><span class="nb-name">${escapeHtml(displayName(p.name))}</span></div>
         ${scoreBar('combined', n.combined)}
       </div>
       <div class="sub-scores">
@@ -850,7 +880,6 @@ function renderNeighbors(name) {
         <span>${difficultyBadge(p.difficulty)}</span>
       </div>
       <div class="nb-meta">${(p.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
-      <div class="nb-mechanism">${escapeHtml(p.mechanism || '')}</div>
     </div>
   `;
   }).join('');
@@ -869,7 +898,7 @@ searchInput.addEventListener('input', () => {
   if (!q) { suggestionsBox.style.display = 'none'; return; }
   const names = searchNames(q);
   if (!names.length) { suggestionsBox.style.display = 'none'; return; }
-  suggestionsBox.innerHTML = names.map(n => `<div data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('');
+  suggestionsBox.innerHTML = names.map(n => `<div data-name="${escapeHtml(n)}">${escapeHtml(displayName(n))}</div>`).join('');
   suggestionsBox.style.display = 'block';
   suggestionsBox.querySelectorAll('div').forEach(el => {
     el.addEventListener('click', () => {

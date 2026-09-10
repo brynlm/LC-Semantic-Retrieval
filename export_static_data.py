@@ -57,7 +57,13 @@ def main():
             "name": name,
             "difficulty": row["difficulty"],
             "tags": list(row["tags"]),
-            "mechanism": abstracts[name].get("mechanism", ""),
+            # "mechanism" (the full LLM-generated abstract text) is deliberately
+            # NOT included -- nothing in the client displays it anymore, and
+            # since this whole architecture ships data.json to every visitor,
+            # not including text nobody uses is a free, real privacy win (see
+            # the corpus-privacy discussion: text that never crosses the wire
+            # can't be copied, unlike the embedding vectors it was generated
+            # from, which still need to ship for client-side search to work).
             "techniques": abstracts[name].get("techniques", []),
             "code": row["code"],
             "description": row["description"],
