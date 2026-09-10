@@ -85,6 +85,8 @@
 
   /* --- home view --- */
   #homeView { padding: 18px 20px; }
+  #searchView { display: none; padding: 18px 20px; }
+  #searchView h2 { margin: 0 0 14px 0; font-size: 18px; }
   #homeView h2 { margin: 0 0 4px 0; font-size: 18px; }
   #homeView .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 16px; }
   #nameFilter {
@@ -318,7 +320,8 @@
     white-space: nowrap;
   }
   #promptBtn:disabled { opacity: .4; cursor: not-allowed; }
-  #promptResults { margin-top: 12px; }
+  #searchStatus { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); }
+  #promptResults { margin-top: 0; }
   .rewritten-box {
     background: var(--panel-alt);
     border: 1px dashed var(--border);
@@ -361,6 +364,14 @@
   </div>
 </header>
 
+<div id="promptPanel">
+  <div id="promptBar">
+    <textarea id="promptInput" rows="2" placeholder="Describe the kind of problem or mechanism you're looking for… (e.g. &quot;two pointers closing in from both ends of a sorted array&quot;)"></textarea>
+    <button id="promptBtn">Search by description</button>
+  </div>
+  <div id="searchStatus"></div>
+</div>
+
 <div id="homeView">
   <h2>Browse problems</h2>
   <div class="sub">Filter by tag and/or name, then pick a problem to explore its matches.</div>
@@ -373,15 +384,12 @@
   <div id="problemList"></div>
 </div>
 
-<div id="problemView">
-  <div id="promptPanel">
-    <div id="promptBar">
-      <textarea id="promptInput" rows="2" placeholder="Describe the kind of problem or mechanism you're looking for… (e.g. &quot;two pointers closing in from both ends of a sorted array&quot;)"></textarea>
-      <button id="promptBtn">Search by description</button>
-    </div>
-    <div id="promptResults"></div>
-  </div>
+<div id="searchView">
+  <h2>Search results</h2>
+  <div id="promptResults"></div>
+</div>
 
+<div id="problemView">
   <div id="problemControls">
     <div class="controls">
       <div class="control">
@@ -409,6 +417,7 @@ const state = {
   alpha: 0.7,
   activeTags: new Set(),
   nameFilterQuery: '',
+  lastSearch: null, // { prompt, rewritten, degraded, results } from the most recent prompt search
 };
 
 let DATA = null;        // { tag_idf, problems }
@@ -426,6 +435,7 @@ const detailEl = $('#detail');
 const neighborsEl = $('#neighbors');
 const homeViewEl = $('#homeView');
 const problemViewEl = $('#problemView');
+const searchViewEl = $('#searchView');
 const tagCloudEl = $('#tagCloud');
 const nameFilterEl = $('#nameFilter');
 const problemListEl = $('#problemList');
@@ -433,6 +443,7 @@ const resultCountEl = $('#resultCount');
 const promptInput = $('#promptInput');
 const promptBtn = $('#promptBtn');
 const promptResultsEl = $('#promptResults');
+const searchStatusEl = $('#searchStatus');
 
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -579,7 +590,17 @@ async function rewriteQuery(prompt) {
   }
 }
 
-function renderPromptResults(text, degraded, results) {
+// Renders state.lastSearch as its own page (#searchView), independent of
+// whatever problem was being viewed before -- searching always takes you
+// here, and clicking a result takes you into graph-walk mode for that
+// problem specifically, not back to wherever you were.
+function renderSearchView() {
+  if (!state.lastSearch) {
+    promptResultsEl.innerHTML = '<div class="empty-state">No search yet — type a description above and hit search.</div>';
+    return;
+  }
+  const { rewritten, degraded, results } = state.lastSearch;
+
   const cards = results.map(r => {
     const p = DATA.problems[r.idx];
     return `
@@ -598,7 +619,7 @@ function renderPromptResults(text, degraded, results) {
 
   const note = degraded
     ? `<span class="label">Using your exact wording</span> — the rewrite step is temporarily unavailable, so this searched your prompt as-is.`
-    : `<span class="label">Interpreted as:</span>${escapeHtml(text)}`;
+    : `<span class="label">Interpreted as:</span>${escapeHtml(rewritten)}`;
 
   promptResultsEl.innerHTML = `
     <div class="rewritten-box">${note}</div>
@@ -615,7 +636,7 @@ async function runPromptSearch() {
 
   promptBtn.disabled = true;
   promptBtn.textContent = 'Rewriting…';
-  promptResultsEl.innerHTML = '<div class="empty-state">Rewriting query…</div>';
+  searchStatusEl.textContent = 'Rewriting query…';
 
   try {
     const rewritten = await rewriteQuery(prompt);
@@ -623,14 +644,16 @@ async function runPromptSearch() {
     const textToEmbed = degraded ? prompt : rewritten;
 
     promptBtn.textContent = 'Loading embedding model…';
-    promptResultsEl.innerHTML = '<div class="empty-state">Loading local embedding model (first use only)…</div>';
+    searchStatusEl.textContent = 'Loading local embedding model (first use only)…';
 
     const queryVec = await embedText(textToEmbed);
     const results = computeNeighborsForVector(queryVec, state.k);
-    renderPromptResults(textToEmbed, degraded, results);
+    state.lastSearch = { prompt, rewritten: textToEmbed, degraded, results };
+    searchStatusEl.textContent = '';
+    goToSearchResults();
   } catch (e) {
     console.error('Prompt search failed:', e);
-    promptResultsEl.innerHTML = `<div class="empty-state">Search failed: ${escapeHtml(e.message)}</div>`;
+    searchStatusEl.textContent = `Search failed: ${e.message}`;
   } finally {
     promptBtn.disabled = false;
     promptBtn.textContent = 'Search by description';
@@ -672,22 +695,34 @@ function goHome() {
   navigate('');
 }
 
+function goToSearchResults() {
+  navigate('#/search');
+}
+
 function currentRoute() {
   const hash = location.hash;
   if (hash.startsWith('#/problem/')) {
     return { view: 'problem', name: decodeURIComponent(hash.slice('#/problem/'.length)) };
+  }
+  if (hash === '#/search') {
+    return { view: 'search' };
   }
   return { view: 'home' };
 }
 
 function render() {
   const route = currentRoute();
+  homeViewEl.style.display = 'none';
+  problemViewEl.style.display = 'none';
+  searchViewEl.style.display = 'none';
+
   if (route.view === 'problem' && NAME_TO_IDX.has(route.name)) {
-    homeViewEl.style.display = 'none';
     problemViewEl.style.display = 'block';
     renderProblem(route.name);
+  } else if (route.view === 'search') {
+    searchViewEl.style.display = 'block';
+    renderSearchView();
   } else {
-    problemViewEl.style.display = 'none';
     homeViewEl.style.display = 'block';
     renderHome();
   }
