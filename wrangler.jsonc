@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "emantic--etrieval",
+  "name": "lc-semantic-retrieval",
   "main": "worker/index.js",
   "compatibility_date": "2026-09-10",
   "observability": {
