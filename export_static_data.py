@@ -14,9 +14,19 @@ the Python sentence-transformers embeddings and the browser's transformers.js
 ONNX version used for live queries later), but meaningfully shrinks the
 JSON payload versus full float32 text repr.
 
+Also writes static_site/data-dev-mechanisms.json: a separate, small
+{name: mechanism_text} file, gitignored and never deployed, that the
+client merges in ONLY when explicitly running in developer mode (see
+index.html's DEV_MODE check) -- lets abstracts be inspected locally for
+debugging/quality-checking without them ever being part of what actually
+ships to real visitors. Keeping this as a SEPARATE file rather than a flag
+inside data.json matters: the production data.json genuinely never
+contains the text at all, rather than containing it but hidden by a
+client-side toggle (which a look at the Network tab would trivially defeat).
+
 Usage:
     python export_static_data.py
-    -> writes static_site/data.json
+    -> writes static_site/data.json and static_site/data-dev-mechanisms.json
 """
 
 import json
@@ -28,6 +38,7 @@ import numpy as np
 import categorical_similarity as cs
 
 OUT_PATH = "static_site/data.json"
+DEV_MECHANISMS_PATH = "static_site/data-dev-mechanisms.json"
 
 
 def main():
@@ -79,6 +90,12 @@ def main():
 
     size_mb = os.path.getsize(OUT_PATH) / (1024 * 1024)
     print(f"Wrote {OUT_PATH}: {len(problems)} problems, {size_mb:.1f} MB")
+
+    dev_mechanisms = {name: abstracts[name].get("mechanism", "") for name in pool}
+    with open(DEV_MECHANISMS_PATH, "w") as f:
+        json.dump(dev_mechanisms, f)
+    dev_size_mb = os.path.getsize(DEV_MECHANISMS_PATH) / (1024 * 1024)
+    print(f"Wrote {DEV_MECHANISMS_PATH}: {dev_size_mb:.1f} MB (local dev only, gitignored)")
 
 
 if __name__ == "__main__":

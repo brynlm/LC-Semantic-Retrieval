@@ -1,0 +1,4 @@
+.dev.vars
+.wrangler
+data-dev-mechanisms.json
+node_modules

@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <title>Retrieval Explorer</title>
+<!-- Hugging Face's CDN returns 404 for any request whose Referer header is
+     a *.workers.dev origin (confirmed directly: identical request, only the
+     Referer differs, 307->200 without it vs a flat 404 with it -- likely an
+     anti-abuse rule against free/anonymous workers.dev subdomains, not
+     anything about this app specifically). transformers.js's internal
+     fetch() calls to Hugging Face don't set their own referrer policy, so
+     this page-wide policy is what actually suppresses the header for them. -->
+<meta name="referrer" content="no-referrer">
+
 <style>
   :root {
     --bg: #0f1117;
@@ -20,6 +29,14 @@
     --hard: #e05a5a;
   }
   * { box-sizing: border-box; }
+  /* Defensive: without this, any class that sets its own `display` (like
+     .dev-badge's `display: inline-block`) silently overrides the browser's
+     default `[hidden] { display: none }` rule via CSS specificity/cascade
+     origin -- author styles beat the user-agent stylesheet at equal
+     specificity, so `hidden` stops actually hiding anything. Found via the
+     DEV MODE badge rendering for every visitor regardless of the JS gate
+     that was supposed to control it. */
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg);
@@ -275,6 +292,28 @@
   .score-bar .fill { height: 100%; background: var(--accent); }
   .score-num { font-size: 13px; color: var(--text-dim); min-width: 34px; }
   .nb-meta { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .nb-mechanism {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .dev-badge {
+    display: inline-block;
+    background: rgba(255,159,91,.18);
+    color: var(--code-color);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
   .sub-scores { display:flex; gap:14px; margin-top:6px; font-size:13px; color:var(--text-dim); }
   .empty-state { color: var(--text-dim); padding: 40px 0; text-align: center; }
 
@@ -347,7 +386,7 @@
 <div id="loadingOverlay">Loading problem dataset…</div>
 
 <header>
-  <h1 id="homeLink">🔎 Retrieval Explorer</h1>
+  <h1 id="homeLink">🔎 Retrieval Explorer<span id="devBadge" class="dev-badge" hidden>DEV MODE</span></h1>
   <div class="search-wrap">
     <input id="search" placeholder="Jump to a problem (type to search)…" autocomplete="off">
     <div id="suggestions"></div>
@@ -414,6 +453,19 @@ let DATA = null;        // { tag_idf, problems }
 let NAMES = [];         // problem names, index-aligned with DATA.problems
 let NAME_TO_IDX = null; // Map name -> index into DATA.problems
 let TAG_COUNTS = null;  // Map tag -> count of problems carrying it
+
+// Developer mode: shows the LLM-generated mechanism abstracts for local
+// debugging/quality-checking. Gated on BOTH running on localhost AND an
+// explicit ?dev=1 -- the hostname check means this can never activate on
+// the real deployed site even if this code ships there, and requiring the
+// query param too means local testing doesn't show dev-only content by
+// default. The actual abstract text lives in data-dev-mechanisms.json, a
+// separate, gitignored file that's never deployed -- production's
+// data.json genuinely never contains this text at all, rather than
+// containing it behind a client-side toggle a Network tab would defeat.
+const DEV_MODE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  && new URLSearchParams(location.search).get('dev') === '1';
+if (DEV_MODE) document.getElementById('devBadge').hidden = false;
 
 const $ = (sel) => document.querySelector(sel);
 const searchInput = $('#search');
@@ -619,7 +671,7 @@ function renderSearchView() {
     promptResultsEl.innerHTML = '<div class="empty-state">No search yet — type a description above and hit search.</div>';
     return;
   }
-  const { degraded, results } = state.lastSearch;
+  const { rewritten, degraded, results } = state.lastSearch;
 
   const cards = results.map(r => {
     const p = DATA.problems[r.idx];
@@ -633,19 +685,25 @@ function renderSearchView() {
         ${difficultyBadge(p.difficulty)}
         ${(p.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}
       </div>
+      ${DEV_MODE && p.mechanism ? `<div class="nb-mechanism">${escapeHtml(p.mechanism)}</div>` : ''}
     </div>`;
   }).join('');
 
-  // Only shown in degraded mode (rewrite step unavailable) -- that's a
-  // user-facing status worth knowing about. The rewritten text itself isn't
-  // shown, same reasoning as dropping the mechanism abstracts: an internal
-  // implementation detail, not something the user needs to see.
+  // Degraded notice is user-facing status (rewrite step unavailable) and
+  // always shows regardless of dev mode. The rewritten text itself is an
+  // internal implementation detail -- same reasoning as dropping the
+  // mechanism abstracts -- so it's only ever shown in dev mode, for
+  // debugging what the LLM actually produced.
   const degradedNote = degraded
     ? `<div class="rewritten-box"><span class="label">Using your exact wording</span> — the rewrite step is temporarily unavailable, so this searched your prompt as-is.</div>`
+    : '';
+  const devRewriteNote = (DEV_MODE && !degraded && rewritten)
+    ? `<div class="rewritten-box"><span class="label">Interpreted as <span class="dev-badge">DEV</span>:</span> ${escapeHtml(rewritten)}</div>`
     : '';
 
   promptResultsEl.innerHTML = `
     ${degradedNote}
+    ${devRewriteNote}
     <div class="prompt-cards">${cards}</div>
   `;
   promptResultsEl.querySelectorAll('.nb-card').forEach(el => {
@@ -840,6 +898,7 @@ function renderDetail(name) {
     </div>
     <div class="chips" style="margin-top:10px;">${difficultyBadge(data.difficulty)}${(data.tags || []).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
     ${techniques ? `<div class="section-label">Techniques</div><ul class="techniques">${techniques}</ul>` : ''}
+    ${DEV_MODE && data.mechanism ? `<div class="section-label">Mechanism abstract <span class="dev-badge">DEV</span></div><div class="mechanism-text">${escapeHtml(data.mechanism)}</div>` : ''}
     <details>
       <summary>Show code</summary>
       <pre class="code">${escapeHtml(data.code || '')}</pre>
@@ -880,6 +939,7 @@ function renderNeighbors(name) {
         <span>${difficultyBadge(p.difficulty)}</span>
       </div>
       <div class="nb-meta">${(p.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
+      ${DEV_MODE && p.mechanism ? `<div class="nb-mechanism">${escapeHtml(p.mechanism)}</div>` : ''}
     </div>
   `;
   }).join('');
@@ -941,6 +1001,23 @@ kInput.addEventListener('change', () => {
   }
   NAMES = DATA.problems.map(p => p.name);
   NAME_TO_IDX = new Map(NAMES.map((n, i) => [n, i]));
+
+  if (DEV_MODE) {
+    try {
+      const devRes = await fetch('data-dev-mechanisms.json');
+      if (devRes.ok) {
+        const mechanisms = await devRes.json();
+        for (const p of DATA.problems) {
+          p.mechanism = mechanisms[p.name] || '';
+        }
+        console.log('Dev mode: loaded mechanism abstracts for', Object.keys(mechanisms).length, 'problems');
+      } else {
+        console.warn('Dev mode: data-dev-mechanisms.json not found (only generated locally by export_static_data.py)');
+      }
+    } catch (e) {
+      console.warn('Dev mode: failed to load mechanism abstracts:', e);
+    }
+  }
 
   TAG_COUNTS = {};
   for (const p of DATA.problems) {

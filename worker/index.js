@@ -1,19 +1,19 @@
-// Cloudflare Pages Function: POST /api/rewrite
+// Single Worker entry point for the unified Workers+static-assets model
+// (what "wrangler deploy" / wrangler.jsonc's `assets` config uses now --
+// Cloudflare Pages' old file-based `functions/api/*.js` routing convention,
+// which static_site/functions/api/rewrite.js was originally written for,
+// does not carry over to this model). This Worker explicitly routes
+// /api/rewrite itself and delegates every other request to the ASSETS
+// binding (the static_site/ directory).
 //
-// Pure proxy to Groq for the query-rewrite step of prompt-based retrieval --
-// no ML/embedding logic here at all. Embedding (of either the rewritten text
-// or, on failure, the user's raw prompt) happens entirely client-side via
-// transformers.js, so this function's only job is turning a free-text
-// prompt into a paragraph written in the same register as the corpus's own
-// mechanism abstracts (see query_rewrite.py, which this ports near-verbatim
-// -- same SYSTEM_PROMPT, same MODEL_CHAIN, same reasoning_effort handling --
-// just via plain fetch() instead of the Python Groq SDK, since a Worker
-// doesn't need an SDK for one request shape).
-//
-// Contract: POST {prompt: string} -> {rewritten: string} on success,
-// {rewritten: null} once every model in the chain has failed (the client
-// treats this as the graceful-degradation signal, not an error -- a network
-// hiccup and "quota's actually gone today" both resolve to the same branch).
+// Contract for /api/rewrite: POST {prompt: string} -> {rewritten: string}
+// on success, {rewritten: null} once every model in the chain has failed
+// (the client treats this as the graceful-degradation signal, not an
+// error -- a network hiccup and "quota's actually gone today" both resolve
+// to the same branch). No ML/embedding logic here at all -- that all
+// happens client-side via transformers.js; this is a pure proxy to Groq
+// for the query-rewrite step, same SYSTEM_PROMPT/MODEL_CHAIN/
+// reasoning_effort handling as query_rewrite.py.
 
 const MODEL_CHAIN = [
   "openai/gpt-oss-20b",
@@ -76,9 +76,7 @@ async function callGroq(apiKey, model, prompt, useReasoningEffort) {
   return (data.choices?.[0]?.message?.content || "").trim();
 }
 
-export async function onRequestPost(context) {
-  const { request, env } = context;
-
+async function handleRewrite(request, env) {
   let prompt;
   try {
     const body = await request.json();
@@ -118,3 +116,13 @@ export async function onRequestPost(context) {
 
   return Response.json({ rewritten: null });
 }
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/rewrite" && request.method === "POST") {
+      return handleRewrite(request, env);
+    }
+    return env.ASSETS.fetch(request);
+  },
+};

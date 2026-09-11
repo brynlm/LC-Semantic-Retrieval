@@ -2,6 +2,10 @@
 .env
 static_site/.dev.vars
 
+# Dev-only data (LLM-generated abstract text) for local debugging -- must
+# never be deployed or committed; see export_static_data.py's docstring
+static_site/data-dev-mechanisms.json
+
 # Data caches -- large, regeneratable from the pipeline scripts, not source
 *.pkl
 
@@ -19,3 +23,7 @@ node_modules/
 .conda/
 .claude/
 .vscode/
+
+.dev.vars*
+!.dev.vars.example
+!.env.example

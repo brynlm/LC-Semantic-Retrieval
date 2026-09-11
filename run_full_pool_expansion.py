@@ -19,6 +19,16 @@ to the dataset's own `code` column otherwise. In practice almost every NEW
 name here will fall back to the dataset's own code, since the editorial
 scraper was only ever run against ground-truth-related names.
 
+Code is anonymized (scratch_code_embedding_test.anonymize_code -- renames
+the function and every local variable/parameter to a generic placeholder,
+e.g. `stoneGameIV`/`piles` -> `solve`/`v0`) before being passed to the LLM,
+same as scratch_code_only_abstracts_anon.py did for the original 639-pool's
+harder cases. Structural prevention (the leaky identifiers aren't in the
+input at all) beats reactive detection (get_code_only_abstract's own
+banned-word-list-and-retry loop, which still runs as a safety net but
+should rarely need to actually retry now) -- cheaper on rate-limit budget,
+since a clean first attempt is far more likely.
+
 This is a much larger batch (~2000 problems) than any prior run. Expect it
 to plausibly exhaust the day's rate-limit budget partway through --
 get_code_only_abstract already handles that safely (once all 4 models in
@@ -38,6 +48,7 @@ from sentence_transformers import SentenceTransformer
 
 import categorical_similarity as cs
 import structural_features as sf
+from scratch_code_embedding_test import anonymize_code
 from scratch_code_only_abstracts import CACHE_PATH, EMB_CACHE_PATH, get_code_only_abstract
 
 CHECKPOINT_EVERY = 20
@@ -80,6 +91,7 @@ def main():
             code = editorial
         else:
             code = name_to_code[name]
+        code = anonymize_code(code)
 
         abstract = get_code_only_abstract(code, exhausted_models)
         if abstract:
