@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Retrieval Explorer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%94%8D</text></svg>">
 <!-- Hugging Face's CDN returns 404 for any request whose Referer header is
      a *.workers.dev origin (confirmed directly: identical request, only the
      Referer differs, 307->200 without it vs a flat 404 with it -- likely an
@@ -130,6 +131,10 @@
     border: 1px solid var(--border);
     border-radius: 8px;
   }
+  #tagCloud.has-more-y {
+    mask-image: linear-gradient(to bottom, black calc(100% - 18px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 18px), transparent 100%);
+  }
   .tag-toggle {
     cursor: pointer;
     background: var(--panel-alt);
@@ -149,6 +154,14 @@
   #resultMeta { color: var(--text-dim); font-size: 14.5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
   #clearFilters { color: var(--accent); cursor: pointer; font-size: 14.5px; }
   #problemList { display: flex; flex-direction: column; gap: 6px; }
+  .empty-state {
+    padding: 28px 12px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 15px;
+    border: 1px dashed var(--border);
+    border-radius: 7px;
+  }
   .prow {
     display: flex;
     align-items: center;
@@ -253,6 +266,10 @@
     white-space: pre;
     max-height: 320px;
     overflow-y: auto;
+  }
+  pre.code.has-more-x {
+    mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
   }
   details summary {
     cursor: pointer;
@@ -489,6 +506,16 @@ const searchStatusEl = $('#searchStatus');
 
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Toggles `className` on `el` when its content actually overflows along
+// `axis` ('x' or 'y'), so the CSS fade-edge affordance only shows up when
+// there's really more content to scroll to.
+function updateOverflowFade(el, axis, className) {
+  const overflowing = axis === 'y'
+    ? el.scrollHeight > el.clientHeight + 1
+    : el.scrollWidth > el.clientWidth + 1;
+  el.classList.toggle(className, overflowing);
 }
 
 function difficultyBadge(d) {
@@ -834,6 +861,7 @@ function renderTagCloud() {
       renderHome();
     });
   });
+  updateOverflowFade(tagCloudEl, 'y', 'has-more-y');
 }
 
 function filteredProblems() {
@@ -851,14 +879,14 @@ function renderHome() {
   renderTagCloud();
   const results = filteredProblems();
   resultCountEl.textContent = `${results.length} of ${DATA.problems.length} problems`;
-  problemListEl.innerHTML = results.map(p => `
+  problemListEl.innerHTML = results.length ? results.map(p => `
     <div class="prow" data-name="${escapeHtml(p.name)}">
       <span class="prow-name">${escapeHtml(displayName(p.name))}</span>
       ${leetcodeLink(p.name)}
       ${difficultyBadge(p.difficulty)}
       <div class="prow-tags">${p.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
     </div>
-  `).join('');
+  `).join('') : `<div class="empty-state">No problems match your filters.</div>`;
   problemListEl.querySelectorAll('.prow').forEach(el => {
     el.addEventListener('click', (e) => {
       if (e.target.closest('.lc-link')) return;
@@ -908,6 +936,10 @@ function renderDetail(name) {
       <div class="mechanism-text" style="margin-top:8px;">${escapeHtml(data.description || '')}</div>
     </details>
   `;
+  const codeEl = detailEl.querySelector('pre.code');
+  codeEl.closest('details').addEventListener('toggle', (e) => {
+    if (e.target.open) updateOverflowFade(codeEl, 'x', 'has-more-x');
+  });
 }
 
 function scoreBar(label, value) {
