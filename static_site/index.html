@@ -25,7 +25,7 @@
     --accent-dim: #2c4a75;
     --code-color: #ff9f5b;
     --tag-color: #6bcf8f;
-    --easy: #4caf7d;
+    --easy: #5bc0de;
     --medium: #e0a83e;
     --hard: #e05a5a;
   }
@@ -38,14 +38,31 @@
      DEV MODE badge rendering for every visitor regardless of the JS gate
      that was supposed to control it. */
   [hidden] { display: none !important; }
+  /* The page never scrolls as a whole -- body is a fixed-viewport flex
+     column, and whichever view is active (#homeView/#searchView/
+     #problemView) is the sole flex-grow child responsible for its own
+     internal scrolling. This replaces an earlier layout where `main` used
+     a hardcoded `height: calc(100vh - 96px)` guess at the header's height:
+     whenever the header's real rendered height drifted from that number
+     (wrapping onto two lines, font metrics, etc.) or `#problemControls`'s
+     height simply wasn't accounted for at all, the total content exceeded
+     100vh and produced a SECOND, page-level scrollbar stacked on top of
+     the neighbors panel's own scrollbar. Sizing via flex instead of a
+     magic number means the browser computes the remaining height from
+     whatever header/controls actually render at, so it can't drift out of
+     sync. */
+  html, body { height: 100%; margin: 0; }
   body {
-    margin: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     font-size: 16px;
   }
   header {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -102,8 +119,20 @@
   .control .val { font-size: 14px; color: var(--text); min-width: 32px; }
 
   /* --- home view --- */
-  #homeView { padding: 18px 20px; }
-  #searchView { display: none; padding: 18px 20px; }
+  #homeView { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px; }
+
+  /* --- search view --- */
+  /* Same fixed-header / scrollable-body split as #problemControls + main:
+     the heading and K control stay in view, only #promptResults scrolls. */
+  #searchView {
+    display: none; /* JS switches this to 'flex' when the view is active */
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #searchViewHeader { flex: none; padding: 18px 20px 0 20px; }
+  #promptResults { flex: 1; min-height: 0; overflow-y: auto; padding: 0 20px 18px 20px; }
   #searchView h2 { margin: 0 0 14px 0; font-size: 20px; }
   #homeView h2 { margin: 0 0 4px 0; font-size: 20px; }
   #homeView .sub { color: var(--text-dim); font-size: 15px; margin-bottom: 16px; }
@@ -188,8 +217,15 @@
   .title-row { display: flex; align-items: center; gap: 8px; }
 
   /* --- problem view --- */
-  #problemView { display: none; }
+  #problemView {
+    display: none; /* JS switches this to 'flex' when the view is active */
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
   #problemControls {
+    flex: none;
     padding: 8px 20px;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
@@ -200,13 +236,15 @@
     gap: 10px;
   }
   main {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: 420px 1fr;
     gap: 0;
-    height: calc(100vh - 96px);
+    overflow: hidden;
   }
   @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; height: auto; }
+    main { grid-template-columns: 1fr; }
   }
 
   #detail {
@@ -232,7 +270,7 @@
     font-weight: 600;
     margin-right: 6px;
   }
-  .badge.Easy { background: rgba(76,175,125,.18); color: var(--easy); }
+  .badge.Easy { background: rgba(91,192,222,.18); color: var(--easy); }
   .badge.Medium { background: rgba(224,168,62,.18); color: var(--medium); }
   .badge.Hard { background: rgba(224,90,90,.18); color: var(--hard); }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
@@ -252,25 +290,20 @@
     font-weight: 600;
   }
   .mechanism-text { line-height: 1.55; color: var(--text); font-size: 15.5px; }
+  .provenance-block {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    line-height: 1.6;
+  }
+  .prov-key { color: var(--text); font-weight: 600; }
   .techniques { list-style: none; padding: 0; margin: 0; }
   .techniques li { margin-bottom: 8px; font-size: 15px; }
   .techniques .tname { color: var(--code-color); font-weight: 600; }
   .techniques .trole { color: var(--text-dim); }
-  pre.code {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    font-size: 14px;
-    overflow-x: auto;
-    white-space: pre;
-    max-height: 320px;
-    overflow-y: auto;
-  }
-  pre.code.has-more-x {
-    mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
-  }
   details summary {
     cursor: pointer;
     color: var(--accent);
@@ -381,8 +414,20 @@
   .rewritten-box .label { color: var(--accent); font-weight: 600; margin-right: 4px; }
   .prompt-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 10px;
+  }
+  /* .nb-top normally puts the title and score bar side by side
+     (justify-content: space-between), which only has room to breathe in
+     the wide single-column #neighbors panel -- in a narrower grid cell it's
+     what squished titles and overlapped the score bar with the LeetCode
+     link. Scoped to .prompt-cards only, so the top-K matches panel is
+     unaffected: stack title-row above the score bar instead of fighting
+     for the same horizontal space, so each gets the card's full width. */
+  .prompt-cards .nb-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   #loadingOverlay {
@@ -431,7 +476,15 @@
 </div>
 
 <div id="searchView">
-  <h2>Search results</h2>
+  <div id="searchViewHeader">
+    <h2>Search results</h2>
+    <div class="controls" style="margin-bottom:14px;">
+      <div class="control">
+        <label>K</label>
+        <input type="number" id="kSearch" min="1" max="60" value="12">
+      </div>
+    </div>
+  </div>
   <div id="promptResults"></div>
 </div>
 
@@ -490,6 +543,7 @@ const suggestionsBox = $('#suggestions');
 const alphaSlider = $('#alpha');
 const alphaVal = $('#alphaVal');
 const kInput = $('#k');
+const kSearchInput = $('#kSearch');
 const detailEl = $('#detail');
 const neighborsEl = $('#neighbors');
 const homeViewEl = $('#homeView');
@@ -705,7 +759,7 @@ function renderSearchView() {
     return `
     <div class="nb-card" data-name="${escapeHtml(p.name)}">
       <div class="nb-top">
-        <span class="nb-name">${escapeHtml(displayName(p.name))}</span>
+        <div class="title-row"><span class="nb-name">${escapeHtml(displayName(p.name))}</span>${leetcodeLink(p.name)}</div>
         ${scoreBar('similarity', r.score)}
       </div>
       <div class="nb-meta">
@@ -734,7 +788,10 @@ function renderSearchView() {
     <div class="prompt-cards">${cards}</div>
   `;
   promptResultsEl.querySelectorAll('.nb-card').forEach(el => {
-    el.addEventListener('click', () => goToProblem(el.dataset.name));
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.lc-link')) return;
+      goToProblem(el.dataset.name);
+    });
   });
 }
 
@@ -756,7 +813,7 @@ async function runPromptSearch() {
 
     const queryVec = await embedText(textToEmbed);
     const results = computeNeighborsForVector(queryVec, state.k);
-    state.lastSearch = { prompt, rewritten: textToEmbed, degraded, results };
+    state.lastSearch = { prompt, rewritten: textToEmbed, degraded, queryVec, results };
     searchStatusEl.textContent = '';
     goToSearchResults();
   } catch (e) {
@@ -770,7 +827,11 @@ async function runPromptSearch() {
 
 promptBtn.addEventListener('click', runPromptSearch);
 promptInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runPromptSearch();
+  // Plain Enter submits; Shift+Enter still inserts a newline as usual.
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    runPromptSearch();
+  }
 });
 
 // dashes vs spaces shouldn't matter for matching -- titles now display with
@@ -832,10 +893,10 @@ function render() {
   searchViewEl.style.display = 'none';
 
   if (route.view === 'problem' && NAME_TO_IDX.has(route.name)) {
-    problemViewEl.style.display = 'block';
+    problemViewEl.style.display = 'flex';
     renderProblem(route.name);
   } else if (route.view === 'search') {
-    searchViewEl.style.display = 'block';
+    searchViewEl.style.display = 'flex';
     renderSearchView();
   } else {
     homeViewEl.style.display = 'block';
@@ -927,19 +988,37 @@ function renderDetail(name) {
     <div class="chips" style="margin-top:10px;">${difficultyBadge(data.difficulty)}${(data.tags || []).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
     ${techniques ? `<div class="section-label">Techniques</div><ul class="techniques">${techniques}</ul>` : ''}
     ${DEV_MODE && data.mechanism ? `<div class="section-label">Mechanism abstract <span class="dev-badge">DEV</span></div><div class="mechanism-text">${escapeHtml(data.mechanism)}</div>` : ''}
-    <details>
-      <summary>Show code</summary>
-      <pre class="code">${escapeHtml(data.code || '')}</pre>
-    </details>
+    ${DEV_MODE ? provenanceBlock(data.provenance) : ''}
     <details>
       <summary>Show problem description</summary>
       <div class="mechanism-text" style="margin-top:8px;">${escapeHtml(data.description || '')}</div>
     </details>
   `;
-  const codeEl = detailEl.querySelector('pre.code');
-  codeEl.closest('details').addEventListener('toggle', (e) => {
-    if (e.target.open) updateOverflowFade(codeEl, 'x', 'has-more-x');
-  });
+}
+
+// Dev-mode-only provenance display for the newly-scraped-problem batch (see
+// merge_new_problems_into_production.py) -- lets manual graph-walk auditing
+// tell at a glance whether a problem came from that batch and how its code
+// was sourced, without dropping into a Python shell to check the caches.
+// Absent entirely for the pre-existing corpus (provenance is null there).
+function provenanceBlock(provenance) {
+  if (!provenance) return '';
+  const p = provenance;
+  const rows = [
+    ['batch', `new-problem batch (${escapeHtml(p.batch_date || '?')})`],
+    ['code source', escapeHtml(p.code_source || '?') + (p.code_source === 'community' ? ' (unverified)' : ' (official)')],
+    ['language', escapeHtml(p.source_language || '?')],
+    ['anonymized', p.anonymized ? 'yes' : 'no'],
+  ];
+  if (p.community_meta) {
+    rows.push(['community post', `${escapeHtml(p.community_meta.title || '')} by ${escapeHtml(p.community_meta.author || '?')} (${p.community_meta.votes ?? '?'} votes)`]);
+  }
+  return `
+    <div class="section-label">Provenance <span class="dev-badge">DEV</span></div>
+    <div class="provenance-block">
+      ${rows.map(([k, v]) => `<div><span class="prov-key">${k}:</span> ${v}</div>`).join('')}
+    </div>
+  `;
 }
 
 function scoreBar(label, value) {
@@ -962,7 +1041,7 @@ function renderNeighbors(name) {
     return `
     <div class="nb-card" data-name="${escapeHtml(p.name)}">
       <div class="nb-top">
-        <div><span class="nb-rank">#${i + 1}</span><span class="nb-name">${escapeHtml(displayName(p.name))}</span></div>
+        <div class="title-row"><span class="nb-rank">#${i + 1}</span><span class="nb-name">${escapeHtml(displayName(p.name))}</span>${leetcodeLink(p.name)}</div>
         ${scoreBar('combined', n.combined)}
       </div>
       <div class="sub-scores">
@@ -980,7 +1059,10 @@ function renderNeighbors(name) {
     ${cards}
   `;
   neighborsEl.querySelectorAll('.nb-card').forEach(el => {
-    el.addEventListener('click', () => goToProblem(el.dataset.name));
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.lc-link')) return;
+      goToProblem(el.dataset.name);
+    });
   });
 }
 
@@ -1010,14 +1092,26 @@ alphaSlider.addEventListener('input', () => {
   alphaVal.textContent = state.alpha.toFixed(2);
   if (state.current) renderNeighbors(state.current);
 });
-kInput.addEventListener('change', () => {
-  let k = parseInt(kInput.value, 10);
+// Shared by both K inputs (problem view's #k and search view's #kSearch) --
+// they both drive the same state.k, so keep them in sync and re-render
+// whichever view actually has something to show for the new value. Search
+// results are re-sliced from the already-embedded query vector rather than
+// re-running the rewrite+embedding pipeline, so this stays instant.
+function setK(rawValue) {
+  let k = parseInt(rawValue, 10);
   if (isNaN(k) || k < 1) k = 1;
   if (k > 60) k = 60;
   kInput.value = k;
+  kSearchInput.value = k;
   state.k = k;
   if (state.current) renderNeighbors(state.current);
-});
+  if (state.lastSearch) {
+    state.lastSearch.results = computeNeighborsForVector(state.lastSearch.queryVec, state.k);
+    renderSearchView();
+  }
+}
+kInput.addEventListener('change', () => setK(kInput.value));
+kSearchInput.addEventListener('change', () => setK(kSearchInput.value));
 
 // --- initial load: fetch the static dataset, compute tag counts, render ---
 (async () => {
@@ -1040,7 +1134,9 @@ kInput.addEventListener('change', () => {
       if (devRes.ok) {
         const mechanisms = await devRes.json();
         for (const p of DATA.problems) {
-          p.mechanism = mechanisms[p.name] || '';
+          const entry = mechanisms[p.name];
+          p.mechanism = (entry && entry.mechanism) || '';
+          p.provenance = entry && entry.provenance || null;
         }
         console.log('Dev mode: loaded mechanism abstracts for', Object.keys(mechanisms).length, 'problems');
       } else {

@@ -117,11 +117,46 @@ async function handleRewrite(request, env) {
   return Response.json({ rewritten: null });
 }
 
+// Visitor counting: hashes cf-connecting-ip with a private salt (VISITOR_SALT,
+// a secret -- never the raw IP itself) so a KV record can be kept per unique
+// visitor without storing anything that identifies them directly. Runs only
+// for GET / (see wrangler.jsonc's assets.run_worker_first, scoped to just
+// "/" specifically so a single page load -- which also fetches data.json
+// separately -- isn't double-counted, and so every other static asset keeps
+// being served directly by Cloudflare's asset layer exactly as before,
+// untouched by this at all).
+async function hashVisitor(ip, salt) {
+  const data = new TextEncoder().encode(ip + salt);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function trackVisit(request, env, ctx) {
+  const ip = request.headers.get("cf-connecting-ip");
+  const salt = env.VISITOR_SALT;
+  if (!ip || !salt) return; // misconfigured -- fail silently, never block the page load over this
+  const key = "visitor:" + (await hashVisitor(ip, salt));
+  const now = new Date().toISOString();
+  const record = await env.VISITS.get(key, { type: "json" });
+  const updated = record
+    ? { visit_count: record.visit_count + 1, first_seen: record.first_seen, last_seen: now }
+    : { visit_count: 1, first_seen: now, last_seen: now };
+  // waitUntil so the KV write doesn't delay the response the visitor is waiting on
+  ctx.waitUntil(env.VISITS.put(key, JSON.stringify(updated)));
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/api/rewrite" && request.method === "POST") {
       return handleRewrite(request, env);
+    }
+    if (url.pathname === "/" && request.method === "GET") {
+      try {
+        await trackVisit(request, env, ctx);
+      } catch (e) {
+        // never let a tracking failure break the actual page load
+      }
     }
     return env.ASSETS.fetch(request);
   },

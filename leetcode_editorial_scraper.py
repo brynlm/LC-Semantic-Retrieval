@@ -210,3 +210,41 @@ def fetch_official_python_solution(name: str) -> str | None:
         if c["langSlug"] == "python3":
             return c["code"]
     return None
+
+
+# Preference order for fetch_official_solution_any_language: python3/python
+# first since the rest of the pipeline reads more naturally as Python, then
+# a handful of other common languages the abstract-generation LLM can still
+# read and describe just as well -- the mechanism description doesn't
+# depend on the solution being in any particular language, confirmed on
+# editorial_no_python cases where the chosen approach had "python" (legacy
+# Python 2 tag, not "python3") available and was being skipped entirely for
+# no real reason.
+_LANGUAGE_FALLBACK_ORDER = ["python3", "python", "java", "cpp", "javascript", "go", "csharp"]
+
+
+def fetch_official_solution_any_language(name: str) -> tuple[str, str] | None:
+    """Same as fetch_official_python_solution, but falls back through
+    _LANGUAGE_FALLBACK_ORDER instead of requiring python3 specifically.
+    Returns (code, langSlug) or None."""
+    content = _fetch_content(name)
+    if not content:
+        return None
+    approach = select_best_approach(content)
+    if not approach:
+        return None
+
+    resp = requests.post(
+        "https://leetcode.com/graphql",
+        json={"query": _PLAYGROUND_QUERY, "variables": {"uuid": approach["uuid"]}},
+        cookies=_COOKIES, headers=_HEADERS, timeout=15,
+    )
+    codes = resp.json().get("data", {}).get("allPlaygroundCodes") or []
+    by_lang = {c["langSlug"]: c["code"] for c in codes}
+    for lang in _LANGUAGE_FALLBACK_ORDER:
+        if lang in by_lang:
+            return by_lang[lang], lang
+    if by_lang:
+        lang, code = next(iter(by_lang.items()))
+        return code, lang
+    return None

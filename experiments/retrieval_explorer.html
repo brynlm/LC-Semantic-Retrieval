@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Retrieval Explorer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-alt: #1d2129;
+    --border: #2a2f3a;
+    --text: #e4e6eb;
+    --text-dim: #9aa1ac;
+    --accent: #5b9dff;
+    --accent-dim: #2c4a75;
+    --code-color: #ff9f5b;
+    --tag-color: #6bcf8f;
+    --easy: #4caf7d;
+    --medium: #e0a83e;
+    --hard: #e05a5a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 420px; }
+  #search {
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 20;
+    display: none;
+  }
+  #suggestions div {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #suggestions div:hover { background: var(--accent-dim); }
+
+  .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .control { display: flex; align-items: center; gap: 8px; }
+  .control label { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+  .control input[type=range] { width: 110px; }
+  .control input[type=number] { width: 52px; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 5px; }
+  .control .val { font-size: 12px; color: var(--text); min-width: 32px; }
+
+  #breadcrumb {
+    padding: 8px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  #breadcrumb .crumb { cursor: pointer; color: var(--accent); }
+  #breadcrumb .crumb:hover { text-decoration: underline; }
+  #breadcrumb .sep { color: var(--text-dim); }
+  #breadcrumb .current { color: var(--text); font-weight: 600; }
+
+  main {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 0;
+    height: calc(100vh - 96px);
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+  }
+
+  #detail {
+    border-right: 1px solid var(--border);
+    padding: 18px 20px;
+    overflow-y: auto;
+  }
+  #neighbors {
+    padding: 18px 20px;
+    overflow-y: auto;
+  }
+  h2.pname {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 700;
+    word-break: break-word;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .badge.Easy { background: rgba(76,175,125,.18); color: var(--easy); }
+  .badge.Medium { background: rgba(224,168,62,.18); color: var(--medium); }
+  .badge.Hard { background: rgba(224,90,90,.18); color: var(--hard); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+  .chip {
+    background: rgba(107,207,143,.13);
+    color: var(--tag-color);
+    padding: 2px 8px;
+    border-radius: 9px;
+    font-size: 11px;
+  }
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-dim);
+    margin: 16px 0 6px 0;
+    font-weight: 600;
+  }
+  .mechanism-text { line-height: 1.55; color: var(--text); font-size: 13.5px; }
+  .techniques { list-style: none; padding: 0; margin: 0; }
+  .techniques li { margin-bottom: 8px; font-size: 13px; }
+  .techniques .tname { color: var(--code-color); font-weight: 600; }
+  .techniques .trole { color: var(--text-dim); }
+  pre.code {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 12.5px;
+    margin: 4px 0;
+  }
+
+  .nb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .nb-header h3 { margin: 0; font-size: 13px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .nb-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .12s;
+  }
+  .nb-card:hover { border-color: var(--accent); }
+  .nb-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .nb-name { font-weight: 600; font-size: 14px; }
+  .nb-rank { color: var(--text-dim); font-size: 12px; margin-right: 8px; }
+  .nb-scores { display: flex; gap: 10px; align-items: center; }
+  .score-bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .score-bar {
+    width: 70px;
+    height: 6px;
+    background: var(--panel-alt);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .score-bar .fill { height: 100%; background: var(--accent); }
+  .score-num { font-size: 11px; color: var(--text-dim); min-width: 34px; }
+  .nb-meta { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .nb-mechanism {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .sub-scores { display:flex; gap:14px; margin-top:6px; font-size:11px; color:var(--text-dim); }
+  .empty-state { color: var(--text-dim); padding: 40px 0; text-align: center; }
+
+  #promptPanel {
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  #promptBar { display: flex; gap: 10px; align-items: flex-start; }
+  #promptInput {
+    flex: 1;
+    resize: vertical;
+    min-height: 38px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  #promptInput:focus { outline: none; border-color: var(--accent); }
+  #promptBtn {
+    background: var(--accent);
+    color: #0f1117;
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    height: 38px;
+    white-space: nowrap;
+  }
+  #promptBtn:disabled { opacity: .55; cursor: default; }
+  #promptResults { margin-top: 12px; }
+  .rewritten-box {
+    background: var(--panel-alt);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .rewritten-box .label { color: var(--accent); font-weight: 600; margin-right: 4px; }
+  .prompt-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔎 Retrieval Explorer</h1>
+  <div class="search-wrap">
+    <input id="search" placeholder="Jump to a problem (type to search)…" autocomplete="off">
+    <div id="suggestions"></div>
+  </div>
+  <div class="controls">
+    <div class="control">
+      <label>Weight (tag ← → code-only)</label>
+      <input type="range" id="alpha" min="0" max="1" step="0.05" value="0.7">
+      <span class="val" id="alphaVal">0.70</span>
+    </div>
+    <div class="control">
+      <label>K</label>
+      <input type="number" id="k" min="1" max="60" value="12">
+    </div>
+  </div>
+</header>
+
+<div id="promptPanel">
+  <div id="promptBar">
+    <textarea id="promptInput" rows="2" placeholder="Describe the kind of problem or mechanism you're looking for… (e.g. &quot;two pointers closing in from both ends of a sorted array&quot;)"></textarea>
+    <button id="promptBtn">Search by description</button>
+  </div>
+  <div id="promptResults"></div>
+</div>
+
+<div id="breadcrumb"></div>
+
+<main>
+  <div id="detail"><div class="empty-state">Search for a problem to begin.</div></div>
+  <div id="neighbors"></div>
+</main>
+
+<script>
+const state = {
+  current: null,
+  history: [],   // breadcrumb trail of names visited before current
+  k: 12,
+  alpha: 0.7,
+};
+
+const $ = (sel) => document.querySelector(sel);
+const searchInput = $('#search');
+const suggestionsBox = $('#suggestions');
+const alphaSlider = $('#alpha');
+const alphaVal = $('#alphaVal');
+const kInput = $('#k');
+const detailEl = $('#detail');
+const neighborsEl = $('#neighbors');
+const breadcrumbEl = $('#breadcrumb');
+const promptInput = $('#promptInput');
+const promptBtn = $('#promptBtn');
+const promptResultsEl = $('#promptResults');
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function difficultyBadge(d) {
+  return `<span class="badge ${escapeHtml(d)}">${escapeHtml(d)}</span>`;
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed: ${url}`);
+  return res.json();
+}
+
+async function goTo(name, pushHistory = true) {
+  if (!name) return;
+  if (pushHistory && state.current && state.current !== name) {
+    state.history.push(state.current);
+  }
+  state.current = name;
+  searchInput.value = '';
+  suggestionsBox.style.display = 'none';
+  renderBreadcrumb();
+  await Promise.all([loadDetail(name), loadNeighbors(name)]);
+}
+
+function renderBreadcrumb() {
+  if (!state.current) { breadcrumbEl.innerHTML = ''; return; }
+  const parts = state.history.map(
+    n => `<span class="crumb" data-name="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="sep">›</span>`
+  ).join('');
+  breadcrumbEl.innerHTML = parts + `<span class="current">${escapeHtml(state.current)}</span>`;
+  breadcrumbEl.querySelectorAll('.crumb').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.dataset.name;
+      const idx = state.history.indexOf(name);
+      state.history = state.history.slice(0, idx);
+      goTo(name, false);
+    });
+  });
+}
+
+async function loadDetail(name) {
+  detailEl.innerHTML = '<div class="empty-state">Loading…</div>';
+  const data = await fetchJSON(`/api/problem/${encodeURIComponent(name)}`);
+  const abs = data.abstract || {};
+  const techniques = (abs.techniques || []).map(t =>
+    `<li><span class="tname">${escapeHtml(t.name)}</span> — <span class="trole">${escapeHtml(t.role)}</span></li>`
+  ).join('');
+  detailEl.innerHTML = `
+    <h2 class="pname">${escapeHtml(data.name)}</h2>
+    ${difficultyBadge(data.difficulty)}
+    <div class="chips">${(data.tags || []).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
+    <div class="section-label">Mechanism abstract (code-only)</div>
+    <div class="mechanism-text">${escapeHtml(abs.mechanism || '(none)')}</div>
+    ${techniques ? `<div class="section-label">Techniques</div><ul class="techniques">${techniques}</ul>` : ''}
+    <details>
+      <summary>Show code</summary>
+      <pre class="code">${escapeHtml(data.code || '')}</pre>
+    </details>
+    <details>
+      <summary>Show problem description</summary>
+      <div class="mechanism-text" style="margin-top:8px;">${escapeHtml(data.description || '')}</div>
+    </details>
+  `;
+}
+
+function scoreBar(label, value) {
+  const pct = Math.max(0, Math.min(100, value * 100));
+  return `<div class="score-bar-wrap" title="${label}: ${value.toFixed(3)}">
+    <div class="score-bar"><div class="fill" style="width:${pct}%"></div></div>
+    <span class="score-num">${value.toFixed(2)}</span>
+  </div>`;
+}
+
+async function loadNeighbors(name) {
+  neighborsEl.innerHTML = '<div class="empty-state">Loading…</div>';
+  const list = await fetchJSON(`/api/neighbors/${encodeURIComponent(name)}?k=${state.k}&alpha=${state.alpha}`);
+  if (!list.length) {
+    neighborsEl.innerHTML = '<div class="empty-state">No neighbors found.</div>';
+    return;
+  }
+  const cards = list.map((n, i) => `
+    <div class="nb-card" data-name="${escapeHtml(n.name)}">
+      <div class="nb-top">
+        <div><span class="nb-rank">#${i + 1}</span><span class="nb-name">${escapeHtml(n.name)}</span></div>
+        ${scoreBar('combined', n.combined_score)}
+      </div>
+      <div class="sub-scores">
+        <span>code-only: ${n.code_score.toFixed(3)}</span>
+        <span>tag: ${n.tag_score.toFixed(3)}</span>
+        <span>${difficultyBadge(n.difficulty)}</span>
+      </div>
+      <div class="nb-meta">${(n.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>
+      <div class="nb-mechanism">${escapeHtml(n.mechanism || '')}</div>
+    </div>
+  `).join('');
+  neighborsEl.innerHTML = `
+    <div class="nb-header"><h3>Top ${list.length} matches</h3></div>
+    ${cards}
+  `;
+  neighborsEl.querySelectorAll('.nb-card').forEach(el => {
+    el.addEventListener('click', () => goTo(el.dataset.name, true));
+  });
+}
+
+// --- search / autocomplete ---
+let searchDebounce = null;
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchDebounce);
+  const q = searchInput.value.trim();
+  if (!q) { suggestionsBox.style.display = 'none'; return; }
+  searchDebounce = setTimeout(async () => {
+    const names = await fetchJSON(`/api/problems?q=${encodeURIComponent(q)}`);
+    if (!names.length) { suggestionsBox.style.display = 'none'; return; }
+    suggestionsBox.innerHTML = names.map(n => `<div data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('');
+    suggestionsBox.style.display = 'block';
+    suggestionsBox.querySelectorAll('div').forEach(el => {
+      el.addEventListener('click', () => goTo(el.dataset.name, true));
+    });
+  }, 150);
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap')) suggestionsBox.style.display = 'none';
+});
+
+// --- controls ---
+alphaSlider.addEventListener('input', () => {
+  state.alpha = parseFloat(alphaSlider.value);
+  alphaVal.textContent = state.alpha.toFixed(2);
+  if (state.current) loadNeighbors(state.current);
+});
+kInput.addEventListener('change', () => {
+  let k = parseInt(kInput.value, 10);
+  if (isNaN(k) || k < 1) k = 1;
+  if (k > 60) k = 60;
+  kInput.value = k;
+  state.k = k;
+  if (state.current) loadNeighbors(state.current);
+});
+
+// --- search by free-text description (LLM query rewrite -> embedding search) ---
+async function runPromptSearch() {
+  const prompt = promptInput.value.trim();
+  if (!prompt) return;
+  promptBtn.disabled = true;
+  promptBtn.textContent = 'Searching…';
+  promptResultsEl.innerHTML = '<div class="empty-state">Rewriting query and searching…</div>';
+  try {
+    const data = await fetchJSON(`/api/query?prompt=${encodeURIComponent(prompt)}&k=${state.k}`);
+    if (data.error) {
+      promptResultsEl.innerHTML = `<div class="empty-state">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+    const cards = data.results.map(r => `
+      <div class="nb-card" data-name="${escapeHtml(r.name)}">
+        <div class="nb-top">
+          <span class="nb-name">${escapeHtml(r.name)}</span>
+          ${scoreBar('similarity', r.score)}
+        </div>
+        <div class="nb-meta">
+          ${difficultyBadge(r.difficulty)}
+          ${(r.tags || []).slice(0, 8).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}
+        </div>
+        <div class="nb-mechanism">${escapeHtml(r.mechanism || '')}</div>
+      </div>
+    `).join('');
+    promptResultsEl.innerHTML = `
+      <div class="rewritten-box"><span class="label">Interpreted as:</span>${escapeHtml(data.rewritten)}</div>
+      <div class="prompt-cards">${cards}</div>
+    `;
+    promptResultsEl.querySelectorAll('.nb-card').forEach(el => {
+      el.addEventListener('click', () => goTo(el.dataset.name, true));
+    });
+  } catch (e) {
+    promptResultsEl.innerHTML = `<div class="empty-state">Search failed: ${escapeHtml(e.message)}</div>`;
+  } finally {
+    promptBtn.disabled = false;
+    promptBtn.textContent = 'Search by description';
+  }
+}
+promptBtn.addEventListener('click', runPromptSearch);
+promptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runPromptSearch();
+});
+
+// --- initial load: pick a random problem to start from ---
+(async () => {
+  const names = await fetchJSON('/api/problems?q=');
+  if (names.length) goTo(names[Math.floor(Math.random() * names.length)], false);
+})();
+</script>
+</body>
+</html>
