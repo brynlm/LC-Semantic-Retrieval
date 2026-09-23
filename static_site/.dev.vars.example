@@ -1,0 +1,4 @@
+# Local wrangler dev secrets for the Worker (see wrangler.jsonc). Copy to
+# .dev.vars in this directory -- wrangler dev loads it automatically.
+GROQ_API_KEY=
+VISITOR_SALT=

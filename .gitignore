@@ -24,6 +24,10 @@ node_modules/
 .claude/
 .vscode/
 
+# Personal ops/debug utility for querying visitor-count KV data directly --
+# not part of the project's actual functionality, no need to publish it
+check_visits.py
+
 .dev.vars*
 !.dev.vars.example
 !.env.example
