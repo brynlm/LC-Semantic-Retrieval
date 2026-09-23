@@ -15,7 +15,7 @@ Usage:
 
 import pickle
 
-from run_new_problem_community_fetch import _as_usable_python
+from fetch_problem_community_solutions import _as_usable_python
 
 CACHE_PATH = "new_problem_community_cache.pkl"
 
