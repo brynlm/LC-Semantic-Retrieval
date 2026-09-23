@@ -1,68 +1,63 @@
 """
-Generates abstracts for the 812 newly-scraped problems in
-new_problem_source_cache.pkl, using the same model/prompt/leak-scrub
-pipeline as the production run (run_hq_abstract_generation_120b_requesty.py)
--- fireworks/gpt-oss-120b via Requesty, same SYSTEM_PROMPT, same
-leaks()/scrub_leaks() safety net.
+Generates abstracts for problems in problem_source_cache.pkl, using this
+project's current default abstract-generation setup: fireworks/gpt-oss-120b
+via Requesty, the canonical SYSTEM_PROMPT + response parser
+(pipeline_lib._parse_analysis), and the leaks()/scrub_leaks()
+narrative-leakage safety net.
 
-Two deliberate differences from the production script, both per explicit
-direction rather than oversight:
+Writes to STAGING caches, not the live production cache -- see
+publish_problem_abstracts.py for the deliberate, separate step that
+promotes reviewed entries into production. This lets a batch (including a
+full from-scratch corpus regeneration) run for as long as it needs to
+without ever touching what export_static_data.py / the deployed site
+actually reads.
+
+Two deliberate policies, applied uniformly to every problem regardless of
+source:
 
 1. Anonymization is conditional on is_python (from
-   build_new_problem_source_cache.py). anonymize_code() is built on
-   Python's own `ast` module and silently returns the ORIGINAL code on a
-   parse error rather than raising or signaling anything -- so simply
-   calling it on the 36 non-Python (Java/C++) entries would silently skip
-   anonymization with no record that anything unusual happened. Instead:
-   Python code is anonymized as usual; non-Python code is sent as-is, and
-   every generated abstract records whether its input was anonymized, so
-   the ~36 non-Python entries are a visible, deliberate exception to
-   revisit once a real multi-language anonymizer exists, not a silent gap.
-   Same reasoning applies to structural_features.is_usable_solution_code(),
-   also ast.parse-based -- skipped for non-Python entries in favor of a
-   simple non-empty/length sanity check, since the ast-based "has a
-   function def" check isn't meaningful for a language it can't parse.
+   build_problem_source_cache.py). anonymize_code() is built on Python's
+   own `ast` module and silently returns the ORIGINAL code on a parse error
+   rather than raising -- so calling it on a non-Python entry would
+   silently skip anonymization with no record that anything unusual
+   happened. Instead: Python code is anonymized as usual; non-Python code
+   is sent as-is, and every generated abstract records whether its input
+   was anonymized. Same reasoning applies to
+   pipeline_lib.is_usable_solution_code(), also ast.parse-based -- skipped
+   for non-Python entries in favor of a simple non-empty/length sanity
+   check.
 
-2. Community solutions are NOT held to the same correctness bar as the
-   existing corpus's community_verified_* caches (which required actually
-   executing the candidate against real test assertions). That execution
-   harness needs prompt/test/entry_point/starter_code, which don't exist
-   for problems outside the original HF snapshot -- building a synthesizer
-   for that from LeetCode's raw exampleTestcases is deferred, separate
-   work. Per direction, a highly-upvoted community solution is treated as
-   a reasonable proxy for correctness without executing it. `verified`
-   (from the source cache) still records which is which for anyone
-   reviewing later.
+2. Community solutions are not held to an execution-verified correctness
+   bar (see fetch_problem_community_solutions.py's docstring for why --
+   LeetCode alone doesn't provide a ready-made test harness). A
+   highly-upvoted community solution is treated as a reasonable proxy for
+   correctness without executing it. `verified` (from the source cache)
+   still records which is which for anyone reviewing later.
 
-Writes new_problem_abstract_cache.pkl / new_problem_mechanism_embedding_cache.pkl
--- entirely separate from every production cache, per this pipeline's
-"nothing merges until reviewed" scope.
+Writes problem_abstract_cache.staging.pkl / problem_embedding_cache.staging.pkl.
 
 Usage:
-    python run_new_problem_abstract_generation.py [--limit N]
+    python generate_problem_abstracts.py [--limit N]
 """
 
 import argparse
 import os
-import pickle
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
+import pickle
 import requests
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
-import structural_features as sf
-import test_approach_abstract as taa
-from scratch_code_embedding_test import anonymize_code
-from scratch_code_only_abstracts import leaks, scrub_leaks
+from pipeline_lib import SYSTEM_PROMPT, _parse_analysis, anonymize_code, is_usable_solution_code, leaks, scrub_leaks
 
 load_dotenv()
 
 HARD_TIMEOUT_S = 90
-SOURCE_PATH = "new_problem_source_cache.pkl"
-CACHE_PATH = "new_problem_abstract_cache.pkl"
-EMB_CACHE_PATH = "new_problem_mechanism_embedding_cache.pkl"
+SOURCE_PATH = "problem_source_cache.pkl"
+CACHE_PATH = "problem_abstract_cache.staging.pkl"
+EMB_CACHE_PATH = "problem_embedding_cache.staging.pkl"
 CHECKPOINT_EVERY = 20
 
 MODEL = "fireworks/gpt-oss-120b"
@@ -95,7 +90,7 @@ def _post(content):
             "max_tokens": MAX_TOKENS,
             "reasoning_effort": "low",
             "messages": [
-                {"role": "system", "content": taa.SYSTEM_PROMPT},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": content},
             ],
         },
@@ -126,7 +121,7 @@ def call_model(code: str):
             if "choices" in data:
                 text = (data["choices"][0]["message"]["content"] or "").strip()
                 try:
-                    abstract = taa._parse_analysis(text)
+                    abstract = _parse_analysis(text)
                 except Exception as e:
                     print(f"  parse failed (attempt {attempt + 1}): {e}")
                     time.sleep(RETRY_DELAY_S)
@@ -142,21 +137,17 @@ def call_model(code: str):
     return None
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=None)
-    args = ap.parse_args()
-
+def main(limit=None):
     source = load(SOURCE_PATH, {})
-    print(f"New problem source pool: {len(source)} problems")
+    print(f"Source pool: {len(source)} problems")
 
     cache = load(CACHE_PATH, {})
     mech_emb = load(EMB_CACHE_PATH, {})
-    print(f"Already generated: {len(cache)}")
+    print(f"Already generated (staging): {len(cache)}")
 
     remaining = [n for n in sorted(source) if n not in cache]
-    if args.limit:
-        remaining = remaining[:args.limit]
+    if limit:
+        remaining = remaining[:limit]
     print(f"Remaining to attempt: {len(remaining)}")
 
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -170,7 +161,7 @@ def main():
         is_python = entry["is_python"]
 
         if is_python:
-            if not sf.is_usable_solution_code(code):
+            if not is_usable_solution_code(code):
                 n_unusable += 1
                 continue
             model_input = anonymize_code(code)
@@ -193,9 +184,11 @@ def main():
             abstract = None
 
         if abstract:
+            abstract["source"] = entry["source"]
             abstract["anonymized"] = anonymized
             abstract["source_language"] = entry["language"]
             abstract["source_verified"] = entry["verified"]
+            abstract["community_meta"] = entry.get("meta")
             cache[name] = abstract
             mech_emb[name] = embed_model.encode(abstract["mechanism"], normalize_embeddings=True)
             n_done += 1
@@ -214,9 +207,12 @@ def main():
     save(mech_emb, EMB_CACHE_PATH)
     pct = 100 * len(cache) / len(source) if source else 0
     print(f"\nDone{' (stopped early)' if stopped_early else ''}. "
-          f"{n_done} new, {len(cache)} total cached ({pct:.1f}% of new-problem pool), "
+          f"{n_done} new, {len(cache)} total staged ({pct:.1f}% of source pool), "
           f"{n_failed} failures, {n_unusable} unusable source skipped.")
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--limit", type=int, default=None)
+    args = ap.parse_args()
+    main(limit=args.limit)

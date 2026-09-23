@@ -1,7 +1,63 @@
 import ast, signal, textwrap
 import mistune
+import requests
 
 _MD = mistune.create_markdown(renderer=None)
+
+GRAPHQL_URL = "https://leetcode.com/graphql"
+
+_LIST_QUERY = """
+query communitySolutions($questionSlug: String!, $skip: Int!, $first: Int!) {
+  ugcArticleSolutionArticles(questionSlug: $questionSlug, skip: $skip, first: $first, orderBy: MOST_VOTES) {
+    edges {
+      node {
+        uuid
+        title
+        topicId
+        author { userName }
+        reactions { count reactionType }
+      }
+    }
+  }
+}
+"""
+
+_CONTENT_QUERY = """
+query solutionArticle($topicId: ID!) {
+  ugcArticleSolutionArticle(topicId: $topicId) { content }
+}
+"""
+
+
+def fetch_candidates(name: str, top_n: int = 8) -> list:
+    """Lists a problem's community "Solutions" tab posts, most-voted first.
+    Anonymous/public access -- works for any free problem without a session
+    cookie; a premium-only problem's candidates require an authenticated
+    request instead (see experiments/run_premium_locked_community_fetch.py,
+    a one-time pass against the original corpus, not part of the ongoing
+    new-problem pipeline)."""
+    r = requests.post(
+        GRAPHQL_URL,
+        json={"query": _LIST_QUERY, "variables": {"questionSlug": name, "skip": 0, "first": top_n}},
+        timeout=15,
+    )
+    edges = r.json().get("data", {}).get("ugcArticleSolutionArticles", {}).get("edges", []) or []
+    out = []
+    for e in edges:
+        n = e["node"]
+        votes = next((rx["count"] for rx in (n.get("reactions") or []) if rx["reactionType"] == "UPVOTE"), 0)
+        out.append({
+            "uuid": n["uuid"], "title": n["title"], "topicId": n["topicId"],
+            "author": n["author"]["userName"], "votes": votes,
+        })
+    return out
+
+
+def fetch_content(topic_id) -> str:
+    r = requests.post(GRAPHQL_URL, json={"query": _CONTENT_QUERY, "variables": {"topicId": topic_id}}, timeout=15)
+    node = r.json().get("data", {}).get("ugcArticleSolutionArticle")
+    content = node.get("content") if node else None
+    return content or None
 
 
 class _TimeoutError(Exception):

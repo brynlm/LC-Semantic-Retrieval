@@ -1,25 +1,24 @@
 """
-Discovers the full current LeetCode problem list via the live
-`questionList` GraphQL query (paginated over skip/limit) and diffs it
-against our existing corpus (the frozen HF LeetCodeDataset snapshot) to
-find problems we don't have at all -- e.g. anything added to LeetCode after
-that snapshot was created. Confirmed live: LeetCode currently lists 4055
-problems total vs. our ~2641-problem corpus, so this is a substantial,
-real expansion, not a handful of edge cases.
+Discovers the full current LeetCode algorithms-category problem list via the
+live `questionList` GraphQL query (paginated over skip/limit). This is the
+single source of truth for "what problems exist" for the whole pipeline --
+no frozen dataset snapshot involved anywhere. "New" here means "appeared on
+LeetCode since the last time this ran," computed by diffing against
+whatever this same script last wrote, not against any external dataset.
 
-This is a pure discovery/metadata pass -- title, slug, difficulty, tags,
-paid-only status. It does NOT fetch descriptions or solution code (see
-run_problem_metadata_fetch.py and run_new_problem_editorial_fetch.py for
-those); keeping this step narrow means re-running it to pick up brand-new
-LeetCode problems later is cheap and doesn't reshuffle anything downstream.
+Pure discovery/metadata pass -- title, slug, difficulty, tags, paid-only
+status. Does NOT fetch descriptions or solution code (see
+fetch_problem_metadata.py and fetch_problem_editorials.py for those);
+keeping this step narrow means re-running it to pick up brand-new problems
+later is cheap and doesn't reshuffle anything downstream.
 
-Writes discovered_problems_cache.pkl: {titleSlug: {questionFrontendId,
-title, difficulty, isPaidOnly, tags}} for every problem LeetCode returns,
-known or not -- keeping the full listing (not just the new-to-us subset)
-means future diffs against a growing corpus don't require re-fetching.
+Writes problem_catalog_cache.pkl: {titleSlug: {questionFrontendId, title,
+difficulty, isPaidOnly, tags}} for every problem LeetCode returns -- the
+full listing, not just the newly-appeared subset, so every downstream stage
+can compute its own "pending" set directly against this one file.
 
 Usage:
-    python run_problem_discovery.py
+    python discover_problems.py
 """
 
 import os
@@ -28,8 +27,6 @@ import time
 
 import requests
 from dotenv import load_dotenv
-
-import categorical_similarity as cs
 
 load_dotenv()
 
@@ -67,21 +64,29 @@ query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $fi
 PAGE_SIZE = 100
 REQUEST_DELAY_S = 0.4
 MAX_RETRIES = 3
-CACHE_PATH = "discovered_problems_cache.pkl"
+CACHE_PATH = "problem_catalog_cache.pkl"
+
+
+def load(path, default):
+    try:
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        return default
+
+
+def save(obj, path):
+    with open(path, "wb") as f:
+        pickle.dump(obj, f)
 
 
 def fetch_page(skip: int, limit: int):
-    # Scoped to "algorithms" specifically -- confirmed via direct query that
-    # LeetCode's categorySlug values split cleanly: algorithms=3637,
-    # database=323, pandas=338 (overlaps database -- same problems, a
-    # pandas-solution track), shell=4, concurrency=9, javascript=67. This
-    # project's whole pipeline (abstracts, code-only embeddings) is built
-    # around general DSA/algorithm solutions -- SQL and pandas-DataFrame
-    # problems don't fit that model even though some superficially have a
-    # python-shaped signature (confirmed: a plain "does python3 code exist"
-    # check does NOT catch pandas problems, since their solutions are valid
-    # Python, just not algorithmic). Filtering at the category level here is
-    # more reliable than any post-hoc content check.
+    # Scoped to "algorithms" specifically -- LeetCode's categorySlug values
+    # split cleanly: algorithms/database/pandas/shell/concurrency/javascript
+    # are separate pools, and this project's whole pipeline (abstracts,
+    # embeddings) is built around general DSA/algorithm solutions -- SQL and
+    # pandas-DataFrame problems don't fit that model even though some
+    # superficially have a python-shaped signature.
     variables = {"categorySlug": "algorithms", "skip": skip, "limit": limit, "filters": {}}
     for attempt in range(MAX_RETRIES):
         try:
@@ -103,8 +108,8 @@ def fetch_page(skip: int, limit: int):
 
 
 def main():
-    known_names = set(cs.load_dataset()["name"])
-    print(f"Existing corpus (HF snapshot): {len(known_names)} problems")
+    previous = load(CACHE_PATH, {})
+    print(f"Catalog from last run: {len(previous)} problems")
 
     discovered = {}
     skip = 0
@@ -127,14 +132,13 @@ def main():
         print(f"  ...{min(skip, total)}/{total} fetched")
         time.sleep(REQUEST_DELAY_S)
 
-    with open(CACHE_PATH, "wb") as f:
-        pickle.dump(discovered, f)
+    save(discovered, CACHE_PATH)
 
-    new_slugs = sorted(set(discovered) - known_names)
+    new_slugs = sorted(set(discovered) - set(previous))
     new_free = [n for n in new_slugs if not discovered[n]["isPaidOnly"]]
     new_paid = [n for n in new_slugs if discovered[n]["isPaidOnly"]]
-    print(f"\nTotal discovered on LeetCode: {len(discovered)}")
-    print(f"New to our corpus: {len(new_slugs)} ({len(new_free)} free, {len(new_paid)} paid-only)")
+    print(f"\nTotal on LeetCode: {len(discovered)}")
+    print(f"New since last discovery run: {len(new_slugs)} ({len(new_free)} free, {len(new_paid)} paid-only)")
     print(f"Saved full listing to {CACHE_PATH}")
 
 

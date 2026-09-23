@@ -1,55 +1,50 @@
 """
-Fetches community "Solutions" tab candidates for the 554 new problems with
-no usable editorial (new_problem_editorial_cache.pkl status "no_editorial"
-or "editorial_no_python" with no code in any language). Reuses
-run_community_solution_scrape_v2.py's fetch_candidates/fetch_content
-(slug-only, no HF dependency) and community_solution_extract's mistune-based
-extract_code_blocks_ranked unchanged.
+Fetches community "Solutions" tab candidates for problems with no usable
+editorial (fetch_problem_editorials.py status "no_editorial" or
+"editorial_no_python" with no code in any language). Reuses
+community_solution_extract's fetch_candidates/fetch_content (slug-only, no
+dataset dependency) and its mistune-based extract_code_blocks_ranked
+unchanged.
 
-Deliberately does NOT attempt execution-based verification the way
-run_community_solution_scrape_v2.py's find_verified_solution does -- that
-needs prompt/test/entry_point/starter_code, which only exist as HF dataset
-columns and don't exist for problems outside that snapshot (confirmed this
-session; building a test-harness synthesizer from LeetCode's raw
-exampleTestcases is real, separate work, deferred). So this is a lower-
-rigor pass: pick the best-ranked code block from the top-voted posts and
-sanity-check it, rather than proving it correct by running it.
+Deliberately does NOT attempt execution-based verification -- that needs a
+real test harness (prompt/test/entry_point/assert pairs), which LeetCode's
+raw exampleTestcases field doesn't provide ready-made (building a
+synthesizer for that is real, separate work, deferred; see
+fetch_problem_metadata.py's docstring). So this is a lower-rigor pass by
+design, uniformly, for every problem in the corpus: pick the best-ranked
+code block from the top-voted posts and sanity-check it, rather than
+proving it correct by running it. Correctness was never a claim this
+pipeline makes anyway -- the abstract-generation step describes a
+solution's mechanism, not its certified correctness.
 
-Two-tier acceptance, in order, matching the project's language-agnostic
-stance for abstract generation (the LLM describes the mechanism regardless
-of source language -- only the sanity check itself is Python-specific,
-since structural_features.is_usable_solution_code() needs ast.parse):
+Two-tier acceptance, in order:
   1. A Python-tagged code block (from extract_code_blocks_ranked's
      py_tagged list) that parses and contains a function/method def ->
      status "community_unverified", language "python". Walks candidates in
      vote order until one yields such a block.
   2. If no candidate yields a valid Python block, fall back to the
      top-voted candidate's first code block of ANY language, untagged and
-     unchecked (we can't ast.parse non-Python) -> status
-     "community_unverified_nonpython". Lower confidence still, but kept
-     and flagged rather than discarded, per the "flag gaps, don't skip
-     them" approach.
+     unchecked -> status "community_unverified_nonpython".
   3. No code blocks found in any candidate -> status "no_community_solution".
 
-Writes new_problem_community_cache.pkl: {slug: {status, code, language,
-meta: {topicId, title, author, votes}}}. Does not touch any production
-cache or the v1/v2 community caches for the existing corpus.
+Writes problem_community_cache.pkl: {slug: {status, code, language,
+meta: {topicId, title, author, votes}}}.
 
 Usage:
-    python run_new_problem_community_fetch.py [--limit N]
+    python fetch_problem_community_solutions.py [--limit N]
 """
 
 import argparse
 import pickle
 import textwrap
 import time
+from collections import Counter
 
-import structural_features as sf
-from community_solution_extract import extract_code_blocks_ranked, normalize_escapes
-from run_community_solution_scrape_v2 import fetch_candidates, fetch_content
+from community_solution_extract import extract_code_blocks_ranked, fetch_candidates, fetch_content, normalize_escapes
+from pipeline_lib import is_usable_solution_code
 
-EDITORIAL_CACHE_PATH = "new_problem_editorial_cache.pkl"
-CACHE_PATH = "new_problem_community_cache.pkl"
+EDITORIAL_CACHE_PATH = "problem_editorial_cache.pkl"
+CACHE_PATH = "problem_community_cache.pkl"
 CHECKPOINT_EVERY = 15
 REQUEST_DELAY_S = 0.3
 MAX_CANDIDATES_PER_PROBLEM = 6
@@ -68,25 +63,18 @@ def save(obj, path):
         pickle.dump(obj, f)
 
 
-def _as_usable_python(code: str) -> str | None:
+def _as_usable_python(code: str):
     """Returns a usable, syntactically-complete version of `code` if one
     exists, else None. Tries the block as-is first, then wrapped in a
     synthetic `class Solution:` with the whole block re-indented one level
-    -- confirmed on a real sample that ~38% of blocks initially classified
-    "not Python" were actually valid Python method bodies whose community
-    post's code fence only included the methods, not the enclosing class
-    declaration (the class line was written in separate prose or a
-    different fence), which is a bare indented `def` at the top level and
-    therefore a guaranteed SyntaxError on its own even though the code
-    itself is fine. Deliberately does NOT attempt to repair genuine syntax
-    errors (e.g. a missing closing paren) -- confirmed those exist too in a
-    handful of posts, and guessing at a fix risks silently shipping wrong
-    code, which is a different and much worse failure than just leaving it
-    correctly flagged as unusable."""
-    if sf.is_usable_solution_code(code):
+    -- some community posts' code fences only include the methods, not the
+    enclosing class declaration. Deliberately does NOT attempt to repair
+    genuine syntax errors -- guessing at a fix risks silently shipping wrong
+    code, which is worse than leaving it correctly flagged as unusable."""
+    if is_usable_solution_code(code):
         return code
     wrapped = "class Solution:\n" + textwrap.indent(code, "    ")
-    if sf.is_usable_solution_code(wrapped):
+    if is_usable_solution_code(wrapped):
         return wrapped
     return None
 
@@ -120,11 +108,7 @@ def process_one(slug):
     return {"status": "no_community_solution", "code": None, "language": None, "meta": None}
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=None)
-    args = ap.parse_args()
-
+def main(limit=None):
     editorial_cache = load(EDITORIAL_CACHE_PATH, {})
     needs_community = sorted(
         s for s, d in editorial_cache.items()
@@ -134,11 +118,10 @@ def main():
 
     cache = load(CACHE_PATH, {})
     pending = [n for n in needs_community if n not in cache]
-    if args.limit:
-        pending = pending[:args.limit]
+    if limit:
+        pending = pending[:limit]
     print(f"Processing {len(pending)} now")
 
-    from collections import Counter
     counts = Counter()
     for i, slug in enumerate(pending):
         try:
@@ -158,4 +141,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--limit", type=int, default=None)
+    args = ap.parse_args()
+    main(limit=args.limit)
